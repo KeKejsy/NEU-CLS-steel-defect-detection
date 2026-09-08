@@ -1,0 +1,14 @@
+{
+  "converted_files": 1800,
+  "total_objects": 4189,
+  "objects_per_class": {
+    "Cr": 689,
+    "In": 1011,
+    "Pa": 881,
+    "PS": 432,
+    "RS": 628,
+    "Sc": 548
+  },
+  "problems": [],
+  "passed": true
+}

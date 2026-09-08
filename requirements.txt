@@ -1,0 +1,25 @@
+# 依赖清单（由 D 维护）
+# 环境：D:\Miniconda3\envs\paddle_env  （Python 3.12.13）
+# 装包前先确认终端提示符是 (paddle_env)，不要用 base 环境
+#
+# ============ 已经装好的（2026-09-08 实测，不要重复装，也不要升级）============
+paddlepaddle==3.3.1          # CPU 版！无 CUDA，训练走 CPU
+numpy==2.5.2
+pillow==12.3.0
+matplotlib==3.11.1
+pandas==3.0.5
+scikit-learn==1.9.0
+scipy==1.18.1
+tqdm                          # 进度条，装前先 import 试一下
+PyYAML                        # 读 yml 配置
+
+# ============ 还没装，按需装 ============
+# opencv-python                 # C 做检测可视化必须（当前 MISSING）
+# visualdl                      # 训练曲线可视化（当前 MISSING）
+# pycocotools                   # 只在要用 COCO 指标时装，Python 3.12 可能编译失败
+# gradio                        # 可选，C 做网页 Demo 时才装
+
+# ============ 绝对不要装 ============
+# paddledet                     # pip 源上最新只有 2.6.0，要求 numpy<1.24，
+#                               # 会把 numpy 2.5.2 降级、把整个环境搞崩。
+#                               # 要用 PaddleDetection 请 git clone 源码，不要 pip。

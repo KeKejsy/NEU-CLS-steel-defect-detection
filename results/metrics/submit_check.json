@@ -1,0 +1,99 @@
+{
+  "passed": 23,
+  "total": 23,
+  "all_passed": true,
+  "details": [
+    {
+      "item": "存在 dataset/cls/images",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/cls/train.txt",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/cls/val.txt",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/cls/test.txt",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/det/JPEGImages",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/det/Annotations",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/det/label_list.txt",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/det/ImageSets/Main/train.txt",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/det/ImageSets/Main/val.txt",
+      "passed": true
+    },
+    {
+      "item": "存在 dataset/det/ImageSets/Main/test.txt",
+      "passed": true
+    },
+    {
+      "item": "训练集与测试集无重复文件",
+      "passed": true
+    },
+    {
+      "item": "训练集与验证集无重复文件",
+      "passed": true
+    },
+    {
+      "item": "验证集与测试集无重复文件",
+      "passed": true
+    },
+    {
+      "item": "比例符合要求（70.0% / 15.0% / 15.0%）",
+      "passed": true
+    },
+    {
+      "item": "总图片数 1800（实际 1800）",
+      "passed": true
+    },
+    {
+      "item": "列表中的图片文件都存在",
+      "passed": true
+    },
+    {
+      "item": "6 类各 300 张",
+      "passed": true
+    },
+    {
+      "item": "训练集与测试集无重复文件",
+      "passed": true
+    },
+    {
+      "item": "训练集与验证集无重复文件",
+      "passed": true
+    },
+    {
+      "item": "JPEGImages 有 1800 张（实际 1800）",
+      "passed": true
+    },
+    {
+      "item": "每张图都有对应标注",
+      "passed": true
+    },
+    {
+      "item": "ImageSets 覆盖了全部图片",
+      "passed": true
+    },
+    {
+      "item": "label_list.txt 正确（Cr,In,Pa,PS,RS,Sc）",
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 数据（体积大，不进仓库；只进划分脚本与列表文件）
+dataset/raw/
+dataset/cls/images/
+dataset/det/JPEGImages/
+dataset/det/Annotations/
+*.jpg
+*.png
+*.bmp
+
+# 例外：results/figures/ 下的图是作业成果，报告要用，必须进仓库
+!results/figures/*.png
+
+# 训练产物
+results/logs/
+results/weights/
+*.pdparams
+*.pdopt
+*.pdiparams
+vdlrecords.*
+output/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

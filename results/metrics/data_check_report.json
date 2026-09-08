@@ -1,0 +1,17 @@
+{
+  "total_images": 1800,
+  "per_class": {
+    "Cr": 300,
+    "In": 300,
+    "Pa": 300,
+    "PS": 300,
+    "RS": 300,
+    "Sc": 300
+  },
+  "expect_per_class": 300,
+  "bad_size": [],
+  "bad_mode": [],
+  "missing_xml": [],
+  "unknown_class": [],
+  "passed": true
+}

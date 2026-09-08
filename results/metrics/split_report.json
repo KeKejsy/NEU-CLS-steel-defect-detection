@@ -1,0 +1,52 @@
+{
+  "seed": 2026,
+  "ratio": {
+    "train": 0.7,
+    "val": 0.15,
+    "test": 0.15
+  },
+  "per_class": {
+    "Cr": {
+      "total": 300,
+      "train": 210,
+      "val": 45,
+      "test": 45
+    },
+    "In": {
+      "total": 300,
+      "train": 210,
+      "val": 45,
+      "test": 45
+    },
+    "Pa": {
+      "total": 300,
+      "train": 210,
+      "val": 45,
+      "test": 45
+    },
+    "PS": {
+      "total": 300,
+      "train": 210,
+      "val": 45,
+      "test": 45
+    },
+    "RS": {
+      "total": 300,
+      "train": 210,
+      "val": 45,
+      "test": 45
+    },
+    "Sc": {
+      "total": 300,
+      "train": 210,
+      "val": 45,
+      "test": 45
+    }
+  },
+  "total": {
+    "all": 1800,
+    "train": 1260,
+    "val": 270,
+    "test": 270
+  }
+}
