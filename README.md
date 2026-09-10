@@ -17,16 +17,42 @@
 
 ---
 
-## 当前进度（更新时间：2026-09-08）
+## 当前进度（更新时间：2026-09-10）
+
+> 📄 **成员 C 的检测任务已完成**，工作总结见 `docs/C_检测任务工作总结.md`，
+> 技术实现与踩坑记录见 `src/det/README_det.md`，结果总表见 `results/metrics/det_summary.md`。
 
 | 成员 | 状态 | 说明 |
 |---|---|---|
 | A 数据 | ✅ **已完成** | 1800 张图 + 1800 个标注全齐，划分完成，23 项自检全过 |
 | D 工具链 | ⬜ 未开始 | 可以开始，数据分布已确认，够定 `metrics.py` 的函数签名了 |
 | B 分类 | ⬜ 未开始 | **数据已就绪，可以直接开工** |
-| C 检测 | ⬜ 未开始 | **数据已就绪**，但环境有个坑，见下方「⚠️ 三条必读」 |
+| C 检测 | ✅ **已完成** | 两套检测网络 + 区域验证器 + 完整评估，详见 `src/det/README_det.md` |
 
-**下一步**：B/C 立刻开工，D 同步写 `metrics.py`。卡住的不是数据，是 C 的环境问题。
+**下一步**：B 可以开工了（M 类问题的详细结论见 `src/det/README_det.md` 第九节，
+其中「为什么单阶段检测器的置信度分支在本数据集上学不出来」的分析对 B 也有参考价值）。
+
+### C 的实际结论（2026-09-10，本机实测）
+
+方案与原计划有一处重要调整：**没用 PaddleDetection**。原因是它 `requirements.txt`
+第一行就是 `numpy < 2.0`，与本机 numpy 2.5.2 冲突，会破坏 A 已跑通的数据脚本；
+而 `paddle.vision.ops` 原生自带全部所需检测算子，不需要这个框架。
+最终用原生 Paddle 手写了 YOLOv3 与 PP-YOLOE-s 两套网络。
+
+| 结果 | 数值 |
+|---|---|
+| 区域验证器图块分类准确率（验证集） | 0.8872 |
+| 区域验证器在 GT 框上的分类准确率（**测试集**） | **97.00%** |
+| 滑窗 + 验证器 检测 mAP@0.5（测试集） | 0.0548（召回 0.514） |
+| 单阶段检测器 mAP@0.5 | 0.0000（框定位其实可用，IoU 0.74/0.757，但置信度排序学不出来） |
+
+完整结果表由 `python src/det/tools/summarize.py` 生成到
+`results/metrics/det_summary.md`，含每类 AP、各类尝试的实测对比与根因分析。
+
+> ⚠️ 环境修正：本机与 README 下方「开发环境」一节记载的**不是同一台机器**。
+> 本机实测为 `C:\Users\htt22\miniconda3\envs\paddle_env`、
+> **paddlepaddle-gpu 3.2.0**、**RTX 5070 Ti Laptop 12GB**（有 GPU，非 CPU 训练）。
+> 训练速度比 README 记载的 CPU 数据快约 30 倍。
 
 ---
 
@@ -217,10 +243,13 @@ VOC 根目录：dataset/det/
 | `src/cls/eval_cls.py` | B | ⬜ | 测试集推理 + 准确率/精确率/召回率/F1 + 混淆矩阵 |
 | `src/cls/cam.py` | B | ⬜ | Grad-CAM 热力图 |
 | `src/cls/export.py` | B | ⬜ | 导出推理模型 + 测 FPS |
-| `src/det/train.py` + `configs/ppyoloe_s.yml`、`configs/yolov3.yml` | C | ⬜ | 检测训练，`--model` 切换网络 |
-| `src/det/eval_det.py` | C | ⬜ | mAP@0.5、每类 AP、PR 曲线 |
-| `src/det/viz_det.py` | C | ⬜ | 检测框效果图、错例对比图 |
-| `src/det/demo.py` | C | ⬜ | 单图推理 Demo（可选 Gradio 网页） |
+| `src/det/train.py` + `configs/ppyoloe_s.yml`、`configs/yolov3.yml` | C | ✅ | 检测训练，`--model` 切换网络（原生 Paddle 实现，不用 PaddleDetection） |
+| `src/det/eval_det.py` | C | ✅ | mAP@0.5、每类 AP、PR 曲线、混淆矩阵 |
+| `src/det/viz_det.py` | C | ✅ | 检测框效果图、错例对比图、尺寸-AP 图 |
+| `src/det/demo.py` | C | ✅ | 单图/批量推理 Demo，可测 FPS |
+| `src/det/train_verifier.py` + `src/det/core/verifier.py` | C | ✅ | 区域验证器（两阶段第二阶段），GT 框分类准确率 97% |
+| `src/det/eval_2stage.py` + `core/window_detector.py` | C | ✅ | 两阶段检测评估（检测器/滑窗 + 验证器） |
+| `src/det/tools/` | C | ✅ | k-means anchor、诊断、两阶段对比、结果汇总 |
 | `src/tools/metrics.py` | D | ⬜ | 公共指标库，B/C 直接 import |
 | `src/tools/log2table.py` | D | ⬜ | 解析训练日志 → 超参/结果表（CSV + Markdown） |
 | `src/tools/plot_summary.py` | D | ⬜ | 网络对比柱状图、自动拼图 |

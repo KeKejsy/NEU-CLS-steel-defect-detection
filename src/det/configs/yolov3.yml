@@ -1,0 +1,71 @@
+# 成员 C · YOLOv3 检测配置
+# 网络一（对比基线）：Darknet53 主干 + FPN 三尺度 + anchor-based 检测头
+#
+# 输入尺寸说明：本数据集原图 200x200，这里取 416 是 YOLOv3 的经典设置。
+# 之所以不直接用 200：416/32 = 13 能被整除，三个尺度 52/26/13 层次分明；
+# 用 200 时三个尺度是 25/13/7，相邻尺度不是严格 2 倍关系，FPN 融合要做非整数倍重采样。
+# 放大到 416 的代价是每 epoch 约 14 秒（GPU 实测），完全可以接受。
+#
+# 实测（RTX 5070 Ti Laptop 12GB）：bs=16 时 181 ms/step，峰值显存 3.17 GB。
+
+name: yolov3
+model:
+  arch: yolov3
+  num_classes: 6
+  im_size: 416            # 训练与推理必须一致（解码时用它把像素换算成归一化坐标）
+  box_loss: giou          # 可选 iou / giou / diou / ciou
+  # 置信度来源：cls_only = 只用类别分数排序；obj_cls = 经典 YOLOv3 的 obj*cls。
+  # 本数据集每图只标一类缺陷、正样本仅占候选位置的约 0.3%，obj 分支信号弱、收敛慢，
+  # 实测把它乘进分数会显著拖低排序质量（正确框被排到第 30 位开外，mAP 被压到 0）。
+  # obj 分支仍然参与训练（作为辅助损失），只是不作为排序依据。
+  score_mode: obj_cls
+  # obj 分支正样本权重：负样本数量是正样本的约 300 倍，权重 1.0 时优化器会优先
+  # 压低占多数的负样本，把正样本一起压到 logit≈-5（退化解，mAP 恒为 0 而 loss 正常下降）。
+  obj_pos_weight: 1.0
+  label_smooth: 0.0
+  # 定制 anchor（像素，基准 416），由 src/det/tools/kmeans_anchors.py 用 k-means 在本
+  # 数据集训练集上聚类得到。三个尺度按面积升序排列：stride 8 配小 anchor、stride 32 配大 anchor。
+  #
+  # 为什么必须换掉官方 anchor：官方 anchor 是为 COCO（目标普遍很小）设计的，
+  # 而本数据集的缺陷框平均占全图 17.45%，属大框为主。实测官方 anchor 下
+  # 最小 3 个 anchor 的分配占比为 0%，每个框的最佳宽高 IoU 平均只有 0.567；
+  # 更严重的是 9 个 anchor 混在一起比 IoU 会让**所有 GT 都挤到 stride 32 一层**，
+  # 细尺度拿不到任何正样本，负责点上的预测框 IoU 均值只有 0.233（IoU≥0.5 仅 4.3%）。
+  # 换成本组 anchor 后最佳宽高 IoU 提升到 0.692。
+  # 置为 null 或删除本项则回退到 YOLOv3 官方 anchor，便于做对比实验。
+  anchors:
+    - [[40, 73], [46, 159], [94, 108]]      # stride 8
+    - [[359, 54], [158, 131], [67, 389]]    # stride 16
+    - [[135, 260], [277, 150], [310, 401]]  # stride 32
+
+data:
+  im_size: 416
+  augment: true
+  mosaic_p: 0.5           # Mosaic 概率（4 图拼接，提升小目标与上下文多样性）
+  close_mosaic_epoch: 15  # 最后 15 个 epoch 关掉 Mosaic，让框回归收敛到真实分布
+
+train:
+  epochs: 120
+  batch_size: 16
+  num_workers: 0          # 本数据集只有 1800 张小图，DataLoader 开多进程收益有限
+  save_every: 20
+  log_every: 50
+
+optimizer:
+  type: Momentum
+  lr: 0.01                # Momentum + warmup + cosine
+  momentum: 0.9
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  scheduler: cosine
+
+eval:
+  score_threshold: 0.01   # 评估时低阈值多留候选，让 PR 曲线完整
+  nms_threshold: 0.5
+  top_k: 300
+  iou_threshold: 0.5      # mAP@0.5
+
+output:
+  weight_dir: results/weights
+  log_dir: results/logs
+  metric_dir: results/metrics

@@ -1,0 +1,14 @@
+{
+  "epochs": 30,
+  "in_size": 96,
+  "margin": 0.2,
+  "batch_size": 64,
+  "lr": 0.005,
+  "seed": 2026,
+  "params_wan": 258.67,
+  "train_tiles": 4142,
+  "val_tiles": 895,
+  "best_val_acc": 0.8871508379888268,
+  "total_sec": 138.7,
+  "weights": "results/weights/verifier_best.pdparams"
+}
