@@ -54,7 +54,19 @@ def main():
                 if e:
                     evals[f"{name}|{mode}|{split}"] = e
     verifier = load_json(metrics / "verifier_train_summary.json")
+    refiner = load_json(metrics / "refiner_train_summary.json")
     anchor_km = load_json(metrics / "anchor_kmeans.json")
+
+    # ---- 迭代版流程：滑窗 + 验证器/精修器融合 ----
+    fused = {}
+    for tag, label in (("val_verifier", "滑窗+验证器"),
+                       ("val_refiner", "滑窗+精修器"),
+                       ("val_fuse", "滑窗+融合(基础参数)"),
+                       ("val_fuse_best", "滑窗+融合(最优参数)"),
+                       ("test_fuse_best", "滑窗+融合(最优参数)")):
+        d = load_json(metrics / f"{tag}.json")
+        if d:
+            fused[tag] = {"label": label, "data": d}
 
     # ---- 1. 训练摘要 ----
     print("\n【1】单阶段检测网络训练情况")
@@ -70,6 +82,25 @@ def main():
         print(f"  训练图块 {verifier['train_tiles']} / 验证图块 {verifier['val_tiles']}"
               f"  参数量 {verifier['params_wan']} 万")
         print(f"  最佳图块分类准确率 {verifier['best_val_acc']:.4f}")
+    if refiner:
+        print(f"\n【1c】区域精修器（第二阶段升级：判类 + 框回归）")
+        print(f"  训练样本 {refiner['train_samples']} / 验证样本 {refiner['val_samples']}"
+              f"  参数量 {refiner['params_wan']} 万")
+        print(f"  最佳验证准确率 {refiner['best_val_acc']:.4f}"
+              f"  精修后平均 IoU {refiner['final_mean_iou_after_refine']:.4f}")
+
+    # ---- 迭代版流程结果（本方案最终采用）----
+    if fused:
+        print("\n【1d】迭代版流程：滑窗 + 验证器/精修器融合（**最终采用方案**）")
+        print(f"{'流程':<26}{'划分':>6}{'mAP@0.5':>10}{'精确率':>9}{'召回率':>9}"
+              f"{'框/图':>8}{'ms/图':>8}")
+        print("-" * 84)
+        for tag, item in fused.items():
+            d = item["data"]
+            o = d["overall"]
+            print(f"{item['label']:<26}{d['split']:>6}{d['map50']:>10.4f}"
+                  f"{o['precision']:>9.4f}{o['recall']:>9.4f}"
+                  f"{d['outputs_per_image']:>8.1f}{d.get('ms_per_image', 0):>8.0f}")
 
     # ---- 2. 检测评估 ----
     print("\n【2】检测评估结果（mAP@0.5，测试集为最终口径）")
@@ -124,8 +155,35 @@ def main():
                f"- 训练/验证图块：{verifier['train_tiles']} / {verifier['val_tiles']}",
                f"- 参数量：{verifier['params_wan']} 万",
                f"- 图块分类准确率：**{verifier['best_val_acc']:.4f}**"]
+    if refiner:
+        md += ["", "**区域精修器（第二阶段升级：判类 + 框回归）**", "",
+               f"- 训练/验证样本：{refiner['train_samples']} / {refiner['val_samples']}",
+               f"- 参数量：{refiner['params_wan']} 万",
+               f"- 验证准确率：{refiner['best_val_acc']:.4f}",
+               f"- 精修后平均 IoU：{refiner['final_mean_iou_after_refine']:.4f}"]
 
-    md += ["", "## 2. 检测评估结果（mAP@0.5）", "",
+    if fused:
+        md += ["", "## 1b. 迭代版流程：滑窗 + 验证器/精修器融合（**最终采用**）", "",
+               "| 流程 | 划分 | mAP@0.5 | 精确率 | 召回率 | 每图框数 | ms/图 |",
+               "|---|---|---|---|---|---|---|"]
+        for tag, item in fused.items():
+            d = item["data"]
+            o = d["overall"]
+            md.append(f"| {item['label']} | {d['split']} | {d['map50']:.4f} | "
+                      f"{o['precision']:.4f} | {o['recall']:.4f} | "
+                      f"{d['outputs_per_image']:.1f} | {d.get('ms_per_image', 0):.0f} |")
+        md += ["", "每类 AP@0.5（融合方案，测试集）：", "",
+               "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
+               "|---|---|---|---|---|---|---|---|"]
+        best_d = fused.get("test_fuse_best", fused.get("val_fuse_best", {}))
+        if best_d:
+            for c in CN:
+                v = best_d["data"]["per_class"].get(c)
+                if v:
+                    md.append(f"| {c} | {CN[c]} | {v['ap50']:.4f} | {v['precision']:.4f} | "
+                              f"{v['recall']:.4f} | {v['tp']} | {v['fp']} | {v['fn']} |")
+
+    md += ["", "## 2. 检测评估结果（mAP@0.5，早期方案对比）", "",
            "| 配置 | 划分 | mAP@0.5 | 精确率 | 召回率 | 每图框数 |",
            "|---|---|---|---|---|---|"]
     for r in rows:
