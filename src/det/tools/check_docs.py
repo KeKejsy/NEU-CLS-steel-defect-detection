@@ -98,7 +98,8 @@ def main():
         facts["精修器验证准确率"] = r["best_val_acc"]
         facts["精修后平均 IoU"] = r["final_mean_iou_after_refine"]
 
-    for tag, label in (("val_fuse_best", "融合-验证集 mAP"),
+    for tag, label in (("val_fuse_best", "融合第二轮-验证集 mAP"),
+                       ("val_fuse_v2", "融合第三轮-验证集 mAP"),
                        ("test_fuse_best", "融合-测试集 mAP"),
                        ("val_verifier", "仅验证器-验证集 mAP"),
                        ("val_refiner", "仅精修器-验证集 mAP"),

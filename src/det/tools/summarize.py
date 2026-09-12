@@ -59,14 +59,16 @@ def main():
 
     # ---- 迭代版流程：滑窗 + 验证器/精修器融合 ----
     fused = {}
-    for tag, label in (("val_verifier", "滑窗+验证器"),
+    for tag, label in (("val_verifier", "滑窗+验证器(初版)"),
                        ("val_refiner", "滑窗+精修器"),
-                       ("val_fuse", "滑窗+融合(基础参数)"),
-                       ("val_fuse_best", "滑窗+融合(最优参数)"),
-                       ("test_fuse_best", "滑窗+融合(最优参数)")):
+                       ("val_fuse", "滑窗+融合(第二轮基础参数)"),
+                       ("val_fuse_best", "滑窗+融合(第二轮最优参数)"),
+                       ("val_fuse_v2", "滑窗+融合(第三轮:窄宽高比)"),
+                       ("test_fuse_best", "滑窗+融合(第二轮,测试集)")):
         d = load_json(metrics / f"{tag}.json")
         if d:
             fused[tag] = {"label": label, "data": d}
+    ab_aspects = load_json(metrics / "ab_aspects.json")
 
     # ---- 1. 训练摘要 ----
     print("\n【1】单阶段检测网络训练情况")
@@ -172,10 +174,16 @@ def main():
             md.append(f"| {item['label']} | {d['split']} | {d['map50']:.4f} | "
                       f"{o['precision']:.4f} | {o['recall']:.4f} | "
                       f"{d['outputs_per_image']:.1f} | {d.get('ms_per_image', 0):.0f} |")
+        if ab_aspects:
+            md += ["", "**滑窗宽高比 A/B 确认**（分层抽样 "
+                       f"{ab_aspects['per_class_sample']}/类 = {ab_aspects['num_images']} 张）：", "",
+                   "| 配置 | mAP@0.5 | 说明 |", "|---|---|---|"]
+            for k, v in ab_aspects["results"].items():
+                md.append(f"| {k} | {v['map50']:.4f} | 候选 {v['candidates_per_image']:.0f}/图 |")
         md += ["", "每类 AP@0.5（融合方案，测试集）：", "",
                "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
                "|---|---|---|---|---|---|---|---|"]
-        best_d = fused.get("test_fuse_best", fused.get("val_fuse_best", {}))
+        best_d = fused.get("test_fuse_best", fused.get("val_fuse_v2", {}))
         if best_d:
             for c in CN:
                 v = best_d["data"]["per_class"].get(c)
