@@ -69,6 +69,7 @@ def main():
         if d:
             fused[tag] = {"label": label, "data": d}
     ab_aspects = load_json(metrics / "ab_aspects.json")
+    refiner_ab = load_json(metrics / "refiner_ab.json")
 
     # ---- 1. 训练摘要 ----
     print("\n【1】单阶段检测网络训练情况")
@@ -174,6 +175,13 @@ def main():
             md.append(f"| {item['label']} | {d['split']} | {d['map50']:.4f} | "
                       f"{o['precision']:.4f} | {o['recall']:.4f} | "
                       f"{d['outputs_per_image']:.1f} | {d.get('ms_per_image', 0):.0f} |")
+        if refiner_ab:
+            md += ["", "**精修器抖动范围 A/B**（证明「合成指标会误导」）：", "",
+                   "| 版本 | 合成 IoU | 推理精修增益(IoU) | 命中率增益 | mAP@0.5 |",
+                   "|---|---|---|---|---|"]
+            for k, v in refiner_ab["results"].items():
+                md.append(f"| {k} | — | {v['iou_after_mean']-v['iou_before_mean']:+.4f} | "
+                          f"{v['hit_after_pct']-v['hit_before_pct']:+.1f}pp | {v['map50']:.4f} |")
         if ab_aspects:
             md += ["", "**滑窗宽高比 A/B 确认**（分层抽样 "
                        f"{ab_aspects['per_class_sample']}/类 = {ab_aspects['num_images']} 张）：", "",

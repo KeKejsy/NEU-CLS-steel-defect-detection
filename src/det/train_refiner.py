@@ -43,6 +43,8 @@ def main():
     ap.add_argument("--per-gt", type=int, default=6, help="每个 GT 生成几个模拟候选")
     ap.add_argument("--neg-per-img", type=int, default=3)
     ap.add_argument("--reg-weight", type=float, default=1.0, help="框回归损失权重")
+    ap.add_argument("--name", default="refiner",
+                    help="权重与日志的文件名前缀，便于 A/B 对比不同版本")
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--device", default="gpu", choices=["gpu", "cpu"])
     args = ap.parse_args()
@@ -86,7 +88,7 @@ def main():
     weight_dir = utils.resolve_dir("results/weights")
     log_dir = utils.resolve_dir("results/logs")
     metric_dir = utils.resolve_dir("results/metrics")
-    csv = utils.CSVLogger(log_dir / "refiner_train.csv",
+    csv = utils.CSVLogger(log_dir / f"{args.name}_train.csv",
                           ["epoch", "lr", "loss_cls", "loss_reg", "train_acc",
                            "val_acc", "val_cls_acc", "mean_iou_after", "sec"])
 
@@ -143,7 +145,7 @@ def main():
 
         if va_acc > best:
             best = va_acc
-            paddle.save(model.state_dict(), str(weight_dir / "refiner_best.pdparams"))
+            paddle.save(model.state_dict(), str(weight_dir / f"{args.name}_best.pdparams"))
         sec = time.time() - te
         csv.log(epoch=ep + 1, lr=lr.get_lr(), loss_cls=s_cls / max(len(tr_ld), 1),
                 loss_reg=s_reg / max(len(tr_ld), 1), train_acc=tr_acc, val_acc=va_acc,
@@ -161,12 +163,12 @@ def main():
         "train_samples": len(tr), "val_samples": len(va),
         "best_val_acc": best, "final_mean_iou_after_refine": ious,
         "total_sec": round(time.time() - t0, 1),
-        "weights": "results/weights/refiner_best.pdparams",
+        "weights": f"results/weights/{args.name}_best.pdparams",
     }
-    utils.dump_json(summary, metric_dir / "refiner_train_summary.json")
+    utils.dump_json(summary, metric_dir / f"{args.name}_train_summary.json")
     print("=" * 72)
     print(f"完成  最佳验证准确率 {best:.4f}  精修后 IoU {ious:.4f}")
-    print("权重：results/weights/refiner_best.pdparams")
+    print(f"权重：results/weights/{args.name}_best.pdparams")
     print("=" * 72)
 
 

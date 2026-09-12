@@ -101,14 +101,22 @@ def main():
                          "可避免低分框参与 NMS 把高分框误压掉）")
     ap.add_argument("--tag", default=None)
     ap.add_argument("--limit", type=int, default=0, help=">0 时只评估前 N 张（调试用）")
+    ap.add_argument("--refiner-weights", default="results/weights/refiner_best.pdparams",
+                    help="精修器权重路径（便于 A/B 对比不同版本）")
     ap.add_argument("--device", default="gpu", choices=["gpu", "cpu"])
     args = ap.parse_args()
 
     utils.pick_device(prefer_gpu=(args.device == "gpu"))
     utils.seed_everything(2026)
 
+    rw = Path(args.refiner_weights)
+    if not rw.is_absolute():
+        rw = utils.ROOT / rw
+    if not rw.exists():
+        raise SystemExit(f"找不到精修器权重：{rw}")
+
     refiner = RegionRefiner(num_classes=len(CN) + 1, in_size=96)
-    refiner.set_state_dict(paddle.load(str(utils.ROOT / "results/weights/refiner_best.pdparams")))
+    refiner.set_state_dict(paddle.load(str(rw)))
     refiner.eval()
     rinf = RefinerInfer(refiner, in_size=96, margin=0.15, batch=256)
 
