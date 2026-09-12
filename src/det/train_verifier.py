@@ -39,6 +39,11 @@ def main():
     ap.add_argument("--in-size", type=int, default=96)
     ap.add_argument("--margin", type=float, default=0.2)
     ap.add_argument("--neg-per-img", type=int, default=1, help="每图背景样本数")
+    ap.add_argument("--dilate-per-gt", type=int, default=0,
+                    help="每个 GT 生成几个「放大框」难负样本（0=关闭，见 VerifierDataset 说明）")
+    ap.add_argument("--pos-jitter", type=float, default=0.0,
+                    help="正样本抖动幅度（0=直接用 GT 框）")
+    ap.add_argument("--name", default="verifier", help="权重与日志前缀，便于 A/B")
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--device", default="gpu", choices=["gpu", "cpu"])
     args = ap.parse_args()
@@ -54,9 +59,12 @@ def main():
           f"（{len(data_mod.CLASS_NAMES)} 缺陷 + 背景）")
 
     tr_ds = VerifierDataset(utils.ROOT, "train", args.in_size, args.neg_per_img,
-                            args.margin, args.seed)
+                            args.margin, args.seed, pos_jitter=args.pos_jitter,
+                            dilate_per_gt=args.dilate_per_gt)
+    # 验证集用与训练相同的样本构成，指标才可比（但固定种子保证不随机变化）
     va_ds = VerifierDataset(utils.ROOT, "val", args.in_size, args.neg_per_img,
-                            args.margin, args.seed)
+                            args.margin, args.seed, pos_jitter=args.pos_jitter,
+                            dilate_per_gt=args.dilate_per_gt)
     tr_ld = paddle.io.DataLoader(tr_ds, batch_size=args.batch_size, shuffle=True,
                                  drop_last=True, return_list=True)
     va_ld = paddle.io.DataLoader(va_ds, batch_size=args.batch_size, shuffle=False,
@@ -79,7 +87,7 @@ def main():
     weight_dir = utils.resolve_dir("results/weights")
     log_dir = utils.resolve_dir("results/logs")
     metric_dir = utils.resolve_dir("results/metrics")
-    csv = utils.CSVLogger(log_dir / "verifier_train.csv",
+    csv = utils.CSVLogger(log_dir / f"{args.name}_train.csv",
                           ["epoch", "lr", "loss", "train_acc", "val_acc", "val_defect_acc", "sec"])
     best = -1.0
     t0 = time.time()
@@ -122,7 +130,7 @@ def main():
 
         if va_acc > best:
             best = va_acc
-            paddle.save(model.state_dict(), str(weight_dir / "verifier_best.pdparams"))
+            paddle.save(model.state_dict(), str(weight_dir / f"{args.name}_best.pdparams"))
         lr.step()
         sec = time.time() - te
         csv.log(epoch=ep + 1, lr=lr.get_lr(), loss=tot / max(len(tr_ld), 1),
@@ -137,12 +145,12 @@ def main():
         "params_wan": round(n_param / 1e4, 2),
         "train_tiles": len(tr_ds), "val_tiles": len(va_ds),
         "best_val_acc": best, "total_sec": round(time.time() - t0, 1),
-        "weights": "results/weights/verifier_best.pdparams",
+        "weights": f"results/weights/{args.name}_best.pdparams",
     }
-    utils.dump_json(summary, metric_dir / "verifier_train_summary.json")
+    utils.dump_json(summary, metric_dir / f"{args.name}_train_summary.json")
     print("=" * 70)
     print(f"完成  最佳验证准确率 {best:.4f}")
-    print("权重：results/weights/verifier_best.pdparams")
+    print(f"权重：results/weights/{args.name}_best.pdparams")
     print("=" * 70)
 
 

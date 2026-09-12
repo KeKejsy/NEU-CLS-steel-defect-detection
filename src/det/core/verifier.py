@@ -91,14 +91,35 @@ class DefectVerifier(nn.Layer):
 
 
 class VerifierDataset(paddle.io.Dataset):
-    """从 VOC 标注里裁 GT 框（正样本）与随机背景区域（负样本）"""
+    """从 VOC 标注里裁正样本与负样本
+
+    ## 三类样本
+
+    1. **正样本**：GT 框（可选小幅抖动，模拟「框基本对准」的候选）；
+    2. **纯背景样本**：与所有 GT 的 IoU < 0.15 的随机区域；
+    3. **难负样本（dilate_per_gt > 0 时启用）**：把 GT 框放大 1.5~3.0 倍。
+
+    ## 为什么需要第 3 类（本项目实测结论）
+
+    初版验证器只用「GT 框 vs 随机背景」训练。实测它在推理时的行为是：
+    **阈值从 0.5 提到 0.9，每图输出框数只从 49.8 降到 48.6** ——
+    它把几乎所有覆盖到缺陷的窗口都判成缺陷。原因就是它**从未见过
+    「覆盖了缺陷、但框本身不准」的样本**；而实测高分窗口里有 68% 属于
+    IoU 0.1~0.5 的这类框，正是「大而无效」的形态。
+
+    直接生成「与 GT 部分重叠」的难负样本要跑一遍滑窗+打分，成本高；
+    而**把 GT 框放大**能高效造出同性质的样本 —— 框放得越大、与真实缺陷的 IoU 越低，
+    这也正好解释了「加大滑窗尺度反而变差」的现象（见 window_detector 的注释）。
+    """
 
     def __init__(self, root, split="train", in_size=96, neg_per_img=1, margin=0.2,
-                 seed=2026):
+                 seed=2026, pos_jitter=0.0, dilate_per_gt=0):
         super().__init__()
         self.root = Path(root)
         self.in_size = in_size
         self.margin = margin
+        self.pos_jitter = pos_jitter
+        self.dilate_per_gt = dilate_per_gt
         self.img_dir = self.root / "dataset" / "det" / "JPEGImages"
         self.ann_dir = self.root / "dataset" / "det" / "Annotations"
         names = [ln.strip() for ln in
@@ -111,13 +132,40 @@ class VerifierDataset(paddle.io.Dataset):
             img_p = self.img_dir / f"{n}.jpg"
             boxes, labels = self._read_xml(self.ann_dir / f"{n}.xml")
             for b, l in zip(boxes, labels):
-                self.samples.append((img_p, b, l))
-            # 负样本：与所有 GT 的 IoU 都 < 0.1 的随机区域
+                self.samples.append((img_p, self._jitter(b, rng) if pos_jitter > 0 else b, l))
+                # 难负样本：放大 GT 框（「覆盖缺陷但框不准」）
+                for _ in range(dilate_per_gt):
+                    d = self._dilate(b, rng)
+                    if d is not None:
+                        self.samples.append((img_p, d, BG_CLASS))
+            # 纯背景样本：与所有 GT 的 IoU 都 < NEG_IOU 的随机区域
             for _ in range(neg_per_img):
                 bg = self._random_bg(boxes, rng)
                 if bg is not None:
                     self.samples.append((img_p, bg, BG_CLASS))
         rng.shuffle(self.samples)
+
+    def _jitter(self, box, rng):
+        """正样本抖动：小幅缩放 + 平移，模拟「基本对准」的候选"""
+        x1, y1, x2, y2 = box
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        w, h = x2 - x1, y2 - y1
+        s = 1.0 + rng.uniform(-self.pos_jitter, self.pos_jitter)
+        nw, nh = w * s, h * s
+        ncx = cx + rng.uniform(-self.pos_jitter, self.pos_jitter) * w * 0.5
+        ncy = cy + rng.uniform(-self.pos_jitter, self.pos_jitter) * h * 0.5
+        return [ncx - nw / 2, ncy - nh / 2, ncx + nw / 2, ncy + nh / 2]
+
+    def _dilate(self, box, rng):
+        """把 GT 框放大 1.5~3.0 倍，造「大而无效」的难负样本"""
+        x1, y1, x2, y2 = box
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        w, h = x2 - x1, y2 - y1
+        f = rng.uniform(1.5, 3.0)
+        nw, nh = w * f, h * f
+        if nw > 200 * 1.05 or nh > 200 * 1.05:
+            return None
+        return [cx - nw / 2, cy - nh / 2, cx + nw / 2, cy + nh / 2]
 
     @staticmethod
     def _read_xml(p):

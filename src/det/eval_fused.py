@@ -103,6 +103,8 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help=">0 时只评估前 N 张（调试用）")
     ap.add_argument("--refiner-weights", default="results/weights/refiner_best.pdparams",
                     help="精修器权重路径（便于 A/B 对比不同版本）")
+    ap.add_argument("--verifier-weights", default="results/weights/verifier_best.pdparams",
+                    help="验证器权重路径（便于 A/B 对比不同版本）")
     ap.add_argument("--device", default="gpu", choices=["gpu", "cpu"])
     args = ap.parse_args()
 
@@ -120,8 +122,13 @@ def main():
     refiner.eval()
     rinf = RefinerInfer(refiner, in_size=96, margin=0.15, batch=256)
 
+    vw = Path(args.verifier_weights)
+    if not vw.is_absolute():
+        vw = utils.ROOT / vw
+    if not vw.exists():
+        raise SystemExit(f"找不到验证器权重：{vw}")
     verifier = DefectVerifier(num_classes=len(CN) + 1, in_size=96)
-    verifier.set_state_dict(paddle.load(str(utils.ROOT / "results/weights/verifier_best.pdparams")))
+    verifier.set_state_dict(paddle.load(str(vw)))
     verifier.eval()
     vinf = VerifierInfer(verifier, batch=512)
 
