@@ -10,8 +10,8 @@
   "params_wan": 259.08,
   "train_samples": 21055,
   "val_samples": 2667,
-  "best_val_acc": 0.7806524184476941,
-  "final_mean_iou_after_refine": 0.4419838488101959,
-  "total_sec": 998.8,
+  "best_val_acc": 0.7795275590551181,
+  "final_mean_iou_after_refine": 0.4442209303379059,
+  "total_sec": 1069.8,
   "weights": "results/weights/refiner_best.pdparams"
 }

@@ -8,7 +8,7 @@
   "params_wan": 258.67,
   "train_tiles": 4142,
   "val_tiles": 895,
-  "best_val_acc": 0.8871508379888268,
-  "total_sec": 138.7,
+  "best_val_acc": 0.8815642458100559,
+  "total_sec": 157.6,
   "weights": "results/weights/verifier_best.pdparams"
 }

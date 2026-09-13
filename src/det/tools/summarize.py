@@ -64,7 +64,9 @@ def main():
                        ("val_fuse", "滑窗+融合(第二轮基础参数)"),
                        ("val_fuse_best", "滑窗+融合(第二轮最优参数)"),
                        ("val_fuse_v2", "滑窗+融合(第三轮:窄宽高比)"),
-                       ("test_fuse_best", "滑窗+融合(第二轮,测试集)")):
+                       ("test_fuse_best", "滑窗+融合(第二轮,测试集)"),
+                       ("val_fuse_final", "★完整流水线 融合(验证集)"),
+                       ("test_fuse_final", "★完整流水线 融合(测试集)")):
         d = load_json(metrics / f"{tag}.json")
         if d:
             fused[tag] = {"label": label, "data": d}
@@ -191,7 +193,7 @@ def main():
         md += ["", "每类 AP@0.5（融合方案，测试集）：", "",
                "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
                "|---|---|---|---|---|---|---|---|"]
-        best_d = fused.get("test_fuse_best", fused.get("val_fuse_v2", {}))
+        best_d = fused.get("test_fuse_final", fused.get("test_fuse_best", {}))
         if best_d:
             for c in CN:
                 v = best_d["data"]["per_class"].get(c)

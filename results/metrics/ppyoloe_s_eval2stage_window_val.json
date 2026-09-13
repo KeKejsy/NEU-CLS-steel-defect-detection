@@ -1,13 +1,13 @@
 {
   "pipeline": "two_stage",
   "mode": "window",
-  "detector": "yolov3",
+  "detector": "ppyoloe_s",
   "verifier": "results/weights/verifier_best.pdparams",
   "split": "val",
   "num_images": 270,
   "num_gt_boxes": 639,
   "num_pred_boxes": 13325,
-  "ms_per_image": 940.6,
+  "ms_per_image": 936.0,
   "iou_threshold": 0.5,
   "params": {
     "top_n": 200,

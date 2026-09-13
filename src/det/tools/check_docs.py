@@ -98,18 +98,18 @@ def main():
         facts["精修器验证准确率"] = r["best_val_acc"]
         facts["精修后平均 IoU"] = r["final_mean_iou_after_refine"]
 
-    for tag, label in (("val_fuse_best", "融合第二轮-验证集 mAP"),
-                       ("val_fuse_v2", "融合第三轮-验证集 mAP"),
-                       ("test_fuse_best", "融合-测试集 mAP"),
+    for tag, label in (("val_fuse_final", "融合-验证集 mAP"),
+                       ("test_fuse_final", "融合-测试集 mAP"),
                        ("val_verifier", "仅验证器-验证集 mAP"),
                        ("val_refiner", "仅精修器-验证集 mAP"),
-                       ("yolov3_eval2stage_window_test", "初版-测试集 mAP"),
-                       ("yolov3_eval2stage_window_val", "初版-验证集 mAP")):
+                       ("yolov3_eval2stage_window_test", "两阶段基线-测试集 mAP"),
+                       ("yolov3_eval2stage_window_val", "两阶段基线-验证集 mAP")):
         d = jload(m / f"{tag}.json")
         if d:
             facts[label] = d["map50"]
 
-    d = jload(m / "test_fuse_best.json")
+    # 逐类 AP 以「完整流水线跑出的最终测试集结果」为准
+    d = jload(m / "test_fuse_final.json") or jload(m / "test_fuse_best.json")
     if d:
         for c, val in d["per_class"].items():
             facts[f"测试集 {c} AP"] = val["ap50"]

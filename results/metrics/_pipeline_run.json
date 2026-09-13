@@ -1,0 +1,89 @@
+{
+  "total_sec": 11169.4,
+  "tasks": [
+    {
+      "stage": "data",
+      "name": "数据交付自检",
+      "ok": true,
+      "sec": 0.3,
+      "log": "data_数据交付自检.log"
+    },
+    {
+      "stage": "detect",
+      "name": "训练 yolov3",
+      "ok": true,
+      "sec": 2417.4,
+      "log": "detect_训练_yolov3.log"
+    },
+    {
+      "stage": "detect",
+      "name": "训练 ppyoloe_s",
+      "ok": true,
+      "sec": 5151.2,
+      "log": "detect_训练_ppyoloe_s.log"
+    },
+    {
+      "stage": "region",
+      "name": "训练区域验证器",
+      "ok": true,
+      "sec": 161.7,
+      "log": "region_训练区域验证器.log"
+    },
+    {
+      "stage": "region",
+      "name": "训练区域精修器",
+      "ok": true,
+      "sec": 1072.9,
+      "log": "region_训练区域精修器.log"
+    },
+    {
+      "stage": "eval",
+      "name": "yolov3 两阶段评估(val)",
+      "ok": true,
+      "sec": 258.4,
+      "log": "eval_yolov3_两阶段评估(val).log"
+    },
+    {
+      "stage": "eval",
+      "name": "ppyoloe_s 两阶段评估(val)",
+      "ok": true,
+      "sec": 256.9,
+      "log": "eval_ppyoloe_s_两阶段评估(val).log"
+    },
+    {
+      "stage": "eval",
+      "name": "融合方案(val)",
+      "ok": true,
+      "sec": 910.0,
+      "log": "eval_融合方案(val).log"
+    },
+    {
+      "stage": "eval",
+      "name": "融合方案(test)",
+      "ok": true,
+      "sec": 928.0,
+      "log": "eval_融合方案(test).log"
+    },
+    {
+      "stage": "viz",
+      "name": "单阶段可视化",
+      "ok": true,
+      "sec": 8.1,
+      "log": "viz_单阶段可视化.log"
+    },
+    {
+      "stage": "report",
+      "name": "汇总结果表",
+      "ok": true,
+      "sec": 2.5,
+      "log": "report_汇总结果表.log"
+    },
+    {
+      "stage": "report",
+      "name": "文档一致性校验",
+      "ok": false,
+      "sec": 2.0,
+      "log": "report_文档一致性校验.log"
+    }
+  ]
+}
