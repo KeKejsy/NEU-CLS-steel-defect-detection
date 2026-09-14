@@ -1,0 +1,26 @@
+# 成员 B · 分类网络 2：MobileNetV3-small
+# ---------------------------------------------------------------------------
+# 轻量网络，只有 153 万参数，是 ResNet50 的 1/15。
+# CPU 训练实测参考：约 0.7 s/步（batch=16, 200×200），一个 epoch 约 1 分钟，
+#   30 个 epoch 半小时能跑完，适合白天跑、适合先把评估流程跑通。
+# 对比价值：精度通常略低于 ResNet50，但速度快一个量级，正是"网络效果差异"的讨论点。
+# ---------------------------------------------------------------------------
+model: mobilenet_v3_small
+backbone: mobilenet_v3_small
+pretrained: true            # ImageNet 预训练权重（首次运行自动下载，约 10MB）
+num_classes: 6
+
+size: [200, 200]
+epochs: 30
+batch_size: 32
+num_workers: 0
+
+lr: 0.01
+momentum: 0.9
+weight_decay: 0.0001
+lr_scheduler: cosine
+warmup_epochs: 1
+label_smoothing: 0.1
+
+seed: 2026
+log_every: 20

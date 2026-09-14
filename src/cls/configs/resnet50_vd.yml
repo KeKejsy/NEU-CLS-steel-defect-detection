@@ -1,0 +1,29 @@
+# 成员 B · 分类网络 1：ResNet50
+# ---------------------------------------------------------------------------
+# 关于名字：组长方案里写的是 PaddleClas 的 ResNet50_vd，
+#   但本机飞桨自带 paddle.vision.models.resnet50（经典 ResNet50 结构），
+#   不用 clone PaddleClas 源码就能直接拿到 ImageNet 预训练权重，所以这里用它。
+#   报告里可写：ResNet50（paddle.vision 官方实现，ImageNet 预训练）。
+#
+# CPU 训练实测参考：约 4.6 s/步（batch=16, 200×200），一个 epoch 约 6 分钟，
+#   20 个 epoch 约 2 小时，建议晚上挂机跑。
+# ---------------------------------------------------------------------------
+model: resnet50_vd
+backbone: resnet50          # 实际调用的 paddle.vision.models 构造函数
+pretrained: true            # ImageNet 预训练权重（首次运行自动下载，约 100MB）
+num_classes: 6
+
+size: [200, 200]            # 原图就是 200×200，不做缩放
+epochs: 20                  # CPU 下 20 轮约 2 小时；时间充裕可改 30（约 3 小时）
+batch_size: 16
+num_workers: 0
+
+lr: 0.01                    # 预训练微调：动量 SGD + 余弦退火
+momentum: 0.9
+weight_decay: 0.0001
+lr_scheduler: cosine
+warmup_epochs: 2
+label_smoothing: 0.1
+
+seed: 2026
+log_every: 20               # 每 20 步往日志里打一行，方便看进度

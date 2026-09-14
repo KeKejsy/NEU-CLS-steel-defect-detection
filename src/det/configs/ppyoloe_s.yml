@@ -1,0 +1,59 @@
+# 成员 C · PP-YOLOE-s 检测配置
+# 网络二：CSPResNet 主干 + CSPPAN neck + ESE 注意力 + DFL 分布式回归（anchor-free）
+#
+# 与 yolov3.yml 的对比口径（同一批数据、同一划分、同一个后处理与评估代码）：
+#   - YOLOv3      ：anchor-based，预设 9 个 anchor，GIoU 直接回归
+#   - PP-YOLOE-s  ：anchor-free，每点直接回归，DFL 学「边落在哪个区间」的分布
+#   本数据集框宽高比跨度极大（细长划痕 Sc 到近方形麻点 PS），anchor 难以全覆盖，
+#   anchor-free + DFL 在这里有实际优势，配置差异正是为了体现这一点。
+#
+# 显存约束（重要）：RTX 5070 Ti Laptop 只有 12GB。
+# 实测 im_size=640 时 bs=8 峰值 6.22 GB、249 ms/step；
+# 而 bs=16 会把显存顶满到 12.18 GB 并触发显存重试，单步暴涨到 52 秒（慢 200 倍）。
+# 所以 batch_size 固定 8，不要盲目调大。
+#
+# 输入尺寸取 640（PP-YOLOE-s 官方设置），640/32 = 20，四个尺度 80/40/20/10 层次整齐。
+
+name: ppyoloe_s
+model:
+  arch: ppyoloe_s
+  num_classes: 6
+  im_size: 640            # 训练与推理必须一致
+  reg_max: 16             # DFL 的分布区间数（每条边 17 个桶）
+  base_channels: 64
+  depths: [3, 3, 6, 3]    # CSPResNet 四个阶段的残差块数
+  box_loss: giou
+  cls_pos_weight: 1.0     # 分类分支正样本权重
+  center_radius: 2.5      # 正样本分配的中心半径（格），越大正样本越多
+
+data:
+  im_size: 640
+  augment: true
+  mosaic_p: 0.5
+  close_mosaic_epoch: 15
+
+train:
+  epochs: 100
+  batch_size: 8           # 见上方显存约束，勿调大
+  num_workers: 0
+  save_every: 20
+  log_every: 50
+
+optimizer:
+  type: Momentum
+  lr: 0.005               # PP-YOLOE 的 DFL 分支较敏感，学习率略低于 YOLOv3
+  momentum: 0.9
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  scheduler: cosine
+
+eval:
+  score_threshold: 0.01
+  nms_threshold: 0.5
+  top_k: 100
+  iou_threshold: 0.5
+
+output:
+  weight_dir: results/weights
+  log_dir: results/logs
+  metric_dir: results/metrics

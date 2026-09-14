@@ -1,0 +1,56 @@
+{
+  "task": "classification",
+  "owner": "B",
+  "device": "CPU",
+  "updated_at": "2026-09-14 18:40:23",
+  "runs": {
+    "mobilenet_v3_small": {
+      "model": "mobilenet_v3_small",
+      "num_params": 1536118,
+      "params_M": 1.536,
+      "input_size": [
+        200,
+        200
+      ],
+      "exported_model": "results/weights/cls_mobilenet_v3_small_infer.json",
+      "exported_files": [
+        "results/weights/cls_mobilenet_v3_small_infer.json",
+        "results/weights/cls_mobilenet_v3_small_infer.pdiparams"
+      ],
+      "inference_check": {
+        "loaded": true,
+        "max_abs_diff": 0.0
+      },
+      "exported_size_MB": 6.027,
+      "fps_batch1": 95.19,
+      "fps_batch8": 88.72,
+      "latency_ms_batch1": 10.51,
+      "weights": "results/weights/cls_mobilenet_v3_small_best.pdparams",
+      "measured_at": "2026-09-14 16:43:00"
+    },
+    "resnet50_vd": {
+      "model": "resnet50_vd",
+      "num_params": 23573446,
+      "params_M": 23.573,
+      "input_size": [
+        200,
+        200
+      ],
+      "exported_model": "results/weights/cls_resnet50_vd_infer.json",
+      "exported_files": [
+        "results/weights/cls_resnet50_vd_infer.json",
+        "results/weights/cls_resnet50_vd_infer.pdiparams"
+      ],
+      "inference_check": {
+        "loaded": true,
+        "max_abs_diff": 0.0
+      },
+      "exported_size_MB": 90.091,
+      "fps_batch1": 11.63,
+      "fps_batch8": 11.66,
+      "latency_ms_batch1": 85.97,
+      "weights": "results/weights/cls_resnet50_vd_best.pdparams",
+      "measured_at": "2026-09-14 18:40:23"
+    }
+  }
+}

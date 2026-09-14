@@ -1,0 +1,17 @@
+{
+  "epochs": 40,
+  "in_size": 96,
+  "batch_size": 64,
+  "lr": 0.003,
+  "per_gt": 6,
+  "neg_per_img": 3,
+  "reg_weight": 1.0,
+  "seed": 2026,
+  "params_wan": 259.08,
+  "train_samples": 21055,
+  "val_samples": 2667,
+  "best_val_acc": 0.7795275590551181,
+  "final_mean_iou_after_refine": 0.4442209303379059,
+  "total_sec": 1069.8,
+  "weights": "results/weights/refiner_best.pdparams"
+}

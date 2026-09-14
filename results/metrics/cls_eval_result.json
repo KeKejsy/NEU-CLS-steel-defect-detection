@@ -1,0 +1,241 @@
+{
+  "task": "classification",
+  "owner": "B",
+  "class_names": [
+    "Cr",
+    "In",
+    "Pa",
+    "PS",
+    "RS",
+    "Sc"
+  ],
+  "updated_at": "2026-09-14 18:40:55",
+  "runs": {
+    "mobilenet_v3_small": {
+      "model": "mobilenet_v3_small",
+      "num_params": null,
+      "split": "test",
+      "num_images": 270,
+      "batch_size": 32,
+      "loss": 0.08752648946311739,
+      "weights": "results/weights/cls_mobilenet_v3_small_best.pdparams",
+      "evaluated_at": "2026-09-14 18:40:29",
+      "metrics": {
+        "accuracy": 1.0,
+        "per_class": {
+          "Cr": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "In": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "Pa": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "PS": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "RS": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "Sc": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          }
+        },
+        "macro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "weighted": {
+          "precision": 0.9999999999999999,
+          "recall": 0.9999999999999999,
+          "f1": 0.9999999999999999
+        },
+        "confusion_matrix": [
+          [
+            45,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            45,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            45,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            45,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            45,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            45
+          ]
+        ],
+        "num_samples": 270
+      },
+      "figure": "results/figures/cls_confusion_mobilenet_v3_small.png"
+    },
+    "resnet50_vd": {
+      "model": "resnet50_vd",
+      "num_params": null,
+      "split": "test",
+      "num_images": 270,
+      "batch_size": 16,
+      "loss": 0.07962566230665236,
+      "weights": "results/weights/cls_resnet50_vd_best.pdparams",
+      "evaluated_at": "2026-09-14 18:40:55",
+      "metrics": {
+        "accuracy": 1.0,
+        "per_class": {
+          "Cr": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "In": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "Pa": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "PS": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "RS": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          },
+          "Sc": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0,
+            "support": 45
+          }
+        },
+        "macro": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "weighted": {
+          "precision": 0.9999999999999999,
+          "recall": 0.9999999999999999,
+          "f1": 0.9999999999999999
+        },
+        "confusion_matrix": [
+          [
+            45,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            45,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            45,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            45,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            45,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            45
+          ]
+        ],
+        "num_samples": 270
+      },
+      "figure": "results/figures/cls_confusion_resnet50_vd.png"
+    }
+  }
+}

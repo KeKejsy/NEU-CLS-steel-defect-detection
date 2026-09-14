@@ -1,0 +1,3 @@
+﻿model,num_params_M,epochs,batch_size,lr,best_val_acc,test_acc,macro_precision,macro_recall,macro_f1,fps_batch1,fps_batch8,train_time
+resnet50_vd,23.573,20,16,0.01,1.0,1.0,1.0,1.0,1.0,11.63,11.66,1小时55分
+mobilenet_v3_small,1.536,30,32,0.01,1.0,1.0,1.0,1.0,1.0,95.19,88.72,25分49秒
