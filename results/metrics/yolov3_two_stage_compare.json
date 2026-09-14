@@ -1,0 +1,56 @@
+{
+  "model": "yolov3",
+  "split": "val",
+  "top_n": 60,
+  "cand_threshold": 0.001,
+  "results": {
+    "single_stage": {
+      "map50": 0.0,
+      "per_class": {
+        "Cr": 0.0,
+        "In": 0.0,
+        "Pa": 0.0,
+        "PS": 0.0,
+        "RS": 0.0,
+        "Sc": 0.0
+      },
+      "boxes_per_img": 51.06296296296296
+    },
+    "two_stage_bg0.2": {
+      "map50": 0.0,
+      "per_class": {
+        "Cr": 0.0,
+        "In": 0.0,
+        "Pa": 0.0,
+        "PS": 0.0,
+        "RS": 0.0,
+        "Sc": 0.0
+      },
+      "boxes_per_img": 27.988888888888887
+    },
+    "two_stage_bg0.3": {
+      "map50": 0.0,
+      "per_class": {
+        "Cr": 0.0,
+        "In": 0.0,
+        "Pa": 0.0,
+        "PS": 0.0,
+        "RS": 0.0,
+        "Sc": 0.0
+      },
+      "boxes_per_img": 26.05185185185185
+    },
+    "two_stage_bg0.5": {
+      "map50": 0.0,
+      "per_class": {
+        "Cr": 0.0,
+        "In": 0.0,
+        "Pa": 0.0,
+        "PS": 0.0,
+        "RS": 0.0,
+        "Sc": 0.0
+      },
+      "boxes_per_img": 23.67037037037037
+    }
+  }
+}

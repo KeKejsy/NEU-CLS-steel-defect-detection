@@ -13,7 +13,7 @@
 1. 训练集、验证集、测试集比例 **7 : 1.5 : 1.5**。测试集文件与训练集文件完全独立，确保评估的可靠性。
 2. 至少搭建 **2 种网络**，并对比不同网络的效果差异。
 
-> 本项目实际完成 **4 个网络**（分类 2 个 + 检测 2 个），两个任务各满足一次"至少 2 种"，属超额完成。
+> 本项目实际完成 **4 个网络**（分类 2 个 + 检测 2 个）+ 1 套自研融合方案，两个任务各满足一次"至少 2 种"，属超额完成。
 
 ---
 
@@ -60,9 +60,17 @@
 | 验证集 270 张 | 0.1681 | 0.0755 | 0.6307 | 19.8 |
 | **测试集 270 张** | **0.1552** | **0.0782** | **0.6483** | 19.5 |
 
+**每类 AP@0.5（测试集）**：PS 麻点 **0.353** ｜ Pa 斑块 0.201 ｜ Cr 龟裂 0.136 ｜ RS 0.112 ｜ Sc 划痕 0.070 ｜ In 夹杂 0.059
+
+> 上表数字来自**一次完整流水线重跑**（`python src/det/tools/full_pipeline.py`，总耗时 186.2 分钟，12 个子任务 11 项通过）。
+> 相比最初版本，测试集 mAP@0.5 从 0.0548 提升到 **0.1552（+183%）**，验证集从 0.0677 到 0.1681（+148%）。
+>
+> 区域验证器图块分类准确率（验证集）0.8816；单阶段检测器的框定位其实可用（IoU 0.74/0.757），
+> 但置信度排序学不出来（obj 分数最高只有 0.056）。
+
 **⚠️ 如实说明**：召回率 0.65 尚可，但**精确率只有 0.078**（每图输出 19.5 个框，真值平均只有 2.4 个），
 导致 mAP@0.5 仅 0.155，**未达常规检测任务的及格线（0.5）**。任务2 属于**部分达标**，报告中请勿美化。
-> 详见 `docs/C_检测任务工作总结.md`
+> 详见 `docs/C_检测任务工作总结.md`、`src/det/README_det.md`
 
 ### 对比汇总
 
@@ -89,6 +97,17 @@
 
 **代价**：C 的训练（单阶段 40+86 分钟、融合评估 3.4 秒/图）在纯 CPU 上不现实，**复现需要 GPU**。
 
+### CPU 训练速度实测（A/B 机器，200×200 输入、batch=16）
+
+| 网络 | 单步耗时 | 训练 1260 张 1 个 epoch | 跑 30 epoch |
+|---|---|---|---|
+| ResNet50 | 4.61 s | 约 6 分钟 | 约 3 小时 |
+| MobileNetV3_small | 0.67 s | 约 0.9 分钟 | 约 27 分钟 |
+
+结论：**分类任务 CPU 完全跑得动**（实测 ResNet50 约 116 分钟、MobileNetV3 约 26 分钟；
+即 ResNet50 建议晚上挂着跑，MobileNetV3 白天随便跑）。
+**检测任务（PP-YOLOE-s / YOLOv3）在 CPU 上非常吃力**，必须在 GPU 上跑。
+
 ### 依赖清单
 
 | 包 | 状态 |
@@ -114,6 +133,20 @@ C 实测过 PaddleDetection（release/2.9）：`import ppdet` 会逐层失败（
 conda activate paddle_env
 python -c "import paddle; paddle.utils.run_check()"
 ```
+
+### 网络为什么都用原生 Paddle 手写
+
+- **B 的分类**：直接用 `paddle.vision.models`（实测可用）搭网络 + 手写训练循环：
+
+  ```python
+  from paddle.vision.models import resnet50, mobilenet_v3_small
+  resnet50(num_classes=6)            # 2357 万参数
+  mobilenet_v3_small(num_classes=6)  # 153 万参数
+  ```
+
+  只有 6 分类、1800 张图，手写训练循环不到 100 行，可控好 debug；
+  PaddleClas 是给几百类大工程用的，配置文件套娃，不值得。
+- **C 的检测**：原生 Paddle 手写 YOLOv3 与 PP-YOLOE-s 两套网络（原因见上一节红线）。
 
 ---
 
@@ -165,6 +198,7 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 ├── README.md                 ← 本文件
 ├── requirements.txt          ← 依赖清单（含实际版本 + 禁止安装项）
 ├── .gitignore                ← 数据与权重不进仓库，但放行 results/figures/*.png
+├── .gitattributes            ← 统一换行符，防止 Windows/Linux 之间产生假冲突
 ├── dataset/                  ← A 的地盘（已完成，其他人只读）
 │   ├── raw/                  ← IMAGES(1800) + ANNOTATIONS(1800)
 │   ├── cls/                  ← 分类用数据（images/ 6 类 + train/val/test.txt）
@@ -175,10 +209,10 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 │   ├── det/     (42 个文件)  ← C：检测训练/评估/可视化/两阶段方案 + core/nets/tools
 │   └── tools/   (4 个空脚本) ← D：未完成
 ├── results/
-│   ├── metrics/   ← A 5 份 + B 5 份 + C 9 份（含 det_summary.md）
-│   ├── figures/   ← A 4 张 + B 5 张
-│   ├── logs/      ← B 的训练日志与超参记录
-│   └── weights/   ← 15 个权重文件（981 MB，不进 git）
+│   ├── metrics/   ← 40 份（A 5 + B 5 + C 30）
+│   ├── figures/   ← 50 张（A 4 + B 5 + C 41）
+│   ├── logs/      ← 7 份（B 的训练日志、超参记录与测试集使用记录）
+│   └── weights/   ← 16 个权重文件（981 MB，不进 git）
 └── docs/
     ├── B_分类任务工作总结.md
     └── C_检测任务工作总结.md
@@ -226,11 +260,11 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 | `train_verifier.py` | 区域验证器训练（判类） |
 | `train_refiner.py` | 区域精修器训练（判类 + 框回归） |
 
-**`core/`（8 个模块）**：`data` / `boxes` / `det_ops` / `layers` / `utils`(含 mAP 实现) / `verifier` / `refiner` / `window_detector`
+**`core/`（9 个文件 = 8 个模块 + `__init__.py`）**：`data` / `boxes` / `det_ops` / `layers` / `utils`(含 mAP 实现) / `verifier` / `refiner` / `window_detector`
 
-**`nets/`（4 个网络）**：`darknet` + `yolov3`、`cspresnet` + `ppyoloe`
+**`nets/`（5 个文件 = 4 个网络 + `__init__.py`）**：`darknet` + `yolov3`、`cspresnet` + `ppyoloe`
 
-**`tools/`（16 个）**：诊断与调优工具。`full_pipeline.py` 是一键复现入口，`summarize.py` 生成结果汇总，
+**`tools/`（15 个）**：诊断与调优工具。`full_pipeline.py` 是一键复现入口，`summarize.py` 生成结果汇总，
 `check_docs.py` 校验文档与产物一致性，其余为迭代过程中的消融/调参/诊断脚本（C 保留作为工作量证据）。
 
 > **运行方式注意**：C 的脚本都在开头 `sys.path.insert(0, 脚本所在目录)`，
@@ -351,5 +385,6 @@ python src/det/tools/full_pipeline.py
    给置信度分支加 **Focal Loss / OHEM**；换**有预训练权重**的主干；在滑窗基础上加**框回归头**；
    把 200×200 原图**重叠裁块**扩充训练样本。
 2. **D 的部分完全空缺**：`src/tools/` 四个脚本 0 字节，报告里"评测工具链"一节无内容可写。
-3. **C 缺可视化图**：C 交付包中没有 `figures/`，`viz_det.py` 未实际执行产出（复现需 GPU）。
+3. **C 的复现门槛高**：单阶段训练与融合评估均需 GPU（CPU 上耗时不可接受），
+   现有可视化图与指标已入库，无需重跑即可查证。
 4. **项目文档与产物的一致性**：C 提供了 `src/det/tools/check_docs.py` 可自动校验，改动数字后建议跑一次。

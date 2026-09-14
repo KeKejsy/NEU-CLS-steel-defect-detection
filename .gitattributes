@@ -1,0 +1,35 @@
+# ============================================================
+# 统一换行符与文本处理规则
+#
+# 背景：成员 A/B 用一台 Windows 机器，成员 C 用另一台 Windows 机器。
+# 没有这个文件时，同一份文件在两边会被判成"整文件差异"，产生大量假冲突
+# （2026-09-14 那次合并就有 19 个文件因此报冲突，实际内容完全相同）。
+# ============================================================
+
+# 默认：自动识别文本文件，仓库内统一以 LF 存储
+* text=auto eol=lf
+
+# 源码与文本文件强制 LF
+*.py    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.csv   text eol=lf
+*.sh    text eol=lf
+*.xml   text eol=lf
+
+# 二进制文件：禁止任何换行符转换
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.bmp       binary
+*.gif       binary
+*.zip       binary
+*.npz       binary
+*.npy       binary
+*.pdparams  binary
+*.pdiparams binary
+*.pdopt     binary
+*.pdmodel   binary
