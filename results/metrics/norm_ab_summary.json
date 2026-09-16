@@ -1,0 +1,77 @@
+{
+  "experiment": "主干随机初始化 vs ImageNet 预训练（验证集 A/B）",
+  "date": "2026-09-15 18:32",
+  "split": "val",
+  "num_images": 270,
+  "setting_changes": [
+    "mobilenet_v3_small(pretrained=True)",
+    "input norm: /255 -> ImageNet mean/std"
+  ],
+  "unchanged": [
+    "网络结构",
+    "超参(epochs/lr/batch/seed)",
+    "滑窗与后处理(stride12/score0.6/nms0.4/topk150/maxdet50)"
+  ],
+  "baseline": {
+    "tag": "val_fuse_final",
+    "weights": [
+      "verifier_best",
+      "refiner_best"
+    ],
+    "norm": "none",
+    "map50": 0.16814399362491403,
+    "precision": 0.07549644061446234,
+    "recall": 0.6306729264475743,
+    "outputs_per_image": 19.8,
+    "ms_per_image": 3356.0,
+    "per_class_ap50": {
+      "Cr": 0.15663961505683383,
+      "In": 0.08587801122755198,
+      "Pa": 0.1823150187881377,
+      "PS": 0.38550445078178935,
+      "RS": 0.11789665641734746,
+      "Sc": 0.08063020947782377
+    }
+  },
+  "pretrained": {
+    "tag": "val_fuse_pre",
+    "weights": [
+      "verifier_pre_best",
+      "refiner_pre_best"
+    ],
+    "norm": "imagenet",
+    "map50": 0.20389001374985108,
+    "precision": 0.12962345884705098,
+    "recall": 0.6087636932707355,
+    "outputs_per_image": 11.1,
+    "ms_per_image": 3916.8,
+    "per_class_ap50": {
+      "Cr": 0.1305381531714149,
+      "In": 0.11903104917341559,
+      "Pa": 0.20798310642206103,
+      "PS": 0.39019654700279205,
+      "RS": 0.1627878353430422,
+      "Sc": 0.21280339138638066
+    }
+  },
+  "stage2_metrics": {
+    "verifier_best_val_acc": {
+      "scratch": 0.8815642458100559,
+      "pretrained": 0.9452513966480447
+    },
+    "refiner_best_val_acc": {
+      "scratch": 0.7795275590551181,
+      "pretrained": 0.8316460442444694
+    },
+    "refiner_mean_iou_after": {
+      "scratch": 0.4442209303379059,
+      "pretrained": 0.4743441939353943
+    }
+  },
+  "verdict": {
+    "delta_map50": 0.0357,
+    "relative_pct": 21.3,
+    "adopted": false,
+    "note": "仅验证集；测试集未重跑，交付数字仍为 0.1552"
+  }
+}

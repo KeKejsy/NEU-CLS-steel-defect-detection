@@ -1,0 +1,145 @@
+{
+  "title": "C 任务2 优化轮（2026-09-15）：预训练主干 + GIoU 回归 + 128 输入",
+  "scope": "完整一遍：验证集与测试集都用优化版正式评估；测试集只在此轮评估一次",
+  "ladder": [
+    {
+      "step": "0 起点（第一轮交付版：随机主干 + L2 + 96 输入）",
+      "val_map50": 0.16814399362491403
+    },
+    {
+      "step": "1 主干换 ImageNet 预训练 + ImageNet 归一化",
+      "val_map50": 0.2039,
+      "delta": 0.0358
+    },
+    {
+      "step": "2 精修器回归损失 L2 -> GIoU",
+      "val_map50": 0.2171,
+      "delta": 0.0132
+    },
+    {
+      "step": "3 判别模型输入 96 -> 128",
+      "val_map50": 0.24731793774018715,
+      "delta": 0.0302
+    }
+  ],
+  "official_evaluation": {
+    "val": {
+      "artifact": "results/metrics/val_fuse_pre128.json",
+      "map50": 0.24731793774018715,
+      "precision": 0.152876280535855,
+      "recall": 0.6071987480438185,
+      "outputs_per_image": 9.4,
+      "ms_per_image": 4875.9,
+      "per_class_ap50": {
+        "Cr": 0.2275018733299468,
+        "In": 0.14870429296755805,
+        "Pa": 0.22808048390530816,
+        "PS": 0.5556238283992919,
+        "RS": 0.14826585652456648,
+        "Sc": 0.17573129131445134
+      },
+      "old_pipeline_map50": 0.16814399362491403
+    },
+    "test": {
+      "artifact": "results/metrics/test_fuse_pre128.json",
+      "map50": 0.21764538509475617,
+      "precision": 0.13634592910011686,
+      "recall": 0.5520504731861199,
+      "outputs_per_image": 9.5,
+      "ms_per_image": 4986.5,
+      "per_class_ap50": {
+        "Cr": 0.21857861780589743,
+        "In": 0.13390572234499493,
+        "Pa": 0.15851631352256879,
+        "PS": 0.5359077072883078,
+        "RS": 0.14228796799580895,
+        "Sc": 0.11667598161095893
+      },
+      "old_pipeline_map50": 0.15524410659979707
+    },
+    "figures": [
+      "val_fuse_pre128_pr/ap/conf.png",
+      "test_fuse_pre128_pr/ap/conf.png"
+    ],
+    "params": {
+      "stride": 12,
+      "score_th": 0.6,
+      "nms_iou": 0.4,
+      "max_det": 50
+    },
+    "norm": "imagenet",
+    "in_size": 128,
+    "weights": {
+      "verifier": "verifier_pre128_best.pdparams",
+      "refiner": "refiner_giou128_best.pdparams"
+    },
+    "note": "后处理沿用交付版原参数（0.6/0.4/150/50），未在验证集上挑选后处理参数"
+  },
+  "stage2": {
+    "verifier_val_acc": {
+      "before": 0.8815642458100559,
+      "after": 0.9564245810055866
+    },
+    "refiner_val_acc": {
+      "before": 0.7795275590551181,
+      "after": 0.838395200599925
+    },
+    "refiner_iou_after": {
+      "before": 0.4442209303379059,
+      "after": 0.4918649196624756
+    },
+    "reg_loss": "giou",
+    "in_size": 128,
+    "norm": "imagenet"
+  },
+  "rejected": [
+    {
+      "idea": "逐类分数阈值（坐标上升）",
+      "best_gain": "+0.0056（弱精修器）",
+      "after_stronger_model": "+0.0008~0.0013",
+      "verdict": "增益不叠加，属补偿性，不采纳"
+    },
+    {
+      "idea": "滑窗步长 12 -> 8",
+      "subset_gain": "+0.002",
+      "cost": "候选 4624 -> 10000/图，推理 2.2 倍",
+      "verdict": "噪声级收益换大算力，不采纳"
+    },
+    {
+      "idea": "A：单阶段检测器换预训练主干 + obj 分支 Focal Loss（独立副本 NEU-CLS-steel-defect-A）",
+      "val_map50": 0.0003,
+      "diagnosis": {
+        "obj_score_median": 0.0355,
+        "obj_rank_median": "6667/10647",
+        "cls_rank_median": 3498,
+        "recall_iou50_at_K1000": 0.613
+      },
+      "verdict": "无效：候选位置够（召回@1000=61.3%）但排序学不出来；属数据规模问题"
+    },
+    {
+      "idea": "C：学习式重排序替代固定几何平均（26 维特征 -> 6278 参数 MLP）",
+      "baseline_map50": 0.25395043249235777,
+      "rerank_map50": 0.19486085968565517,
+      "verdict": "无效：学习式打分是更差的类内排序器（三种变体结果逐位相同）"
+    }
+  ],
+  "caveats": [
+    "这一轮是完整评测；测试集在本轮被使用一次（在此之前仅第一轮交付时用过一次）",
+    "输入 128 让推理更慢（测试集单图 4986 ms vs 96 输入的约 3400 ms）",
+    "本轮改动默认值保证历史行为逐位不变（norm=none 已用单元测试核对）"
+  ],
+  "summary": {
+    "test_map50": {
+      "start": 0.0548,
+      "old_pipeline": 0.15524410659979707,
+      "optimized": 0.21764538509475617,
+      "gain_vs_start_pct": 297.2,
+      "gain_vs_old_pct": 40.2
+    },
+    "val_map50": {
+      "old_pipeline": 0.16814399362491403,
+      "optimized": 0.24731793774018715,
+      "gain_pct": 47.1
+    }
+  }
+}

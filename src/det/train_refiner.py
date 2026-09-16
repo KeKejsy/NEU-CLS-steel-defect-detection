@@ -30,7 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core import data as data_mod        # noqa: E402
 from core import utils                    # noqa: E402
-from core.refiner import RegionRefiner, RefineDataset  # noqa: E402
+from core.det_ops import IoULoss          # noqa: E402
+from core.refiner import (RegionRefiner, RefineDataset,  # noqa: E402
+                          decode_refine_batch)
 from core.verifier import BG_CLASS        # noqa: E402
 
 
@@ -43,8 +45,18 @@ def main():
     ap.add_argument("--per-gt", type=int, default=6, help="每个 GT 生成几个模拟候选")
     ap.add_argument("--neg-per-img", type=int, default=3)
     ap.add_argument("--reg-weight", type=float, default=1.0, help="框回归损失权重")
+    ap.add_argument("--reg-loss", default="l2", choices=["l2", "giou", "diou", "ciou"],
+                    help="框回归损失：l2=对归一化偏移做平方误差（历史默认）；"
+                         "giou/diou/ciou=在**解码后的框**上直接优化 IoU 系列指标。"
+                         "AP@0.5 的命中门槛就是 IoU 0.5，后者更对症")
     ap.add_argument("--name", default="refiner",
                     help="权重与日志的文件名前缀，便于 A/B 对比不同版本")
+    ap.add_argument("--pretrained", action="store_true",
+                    help="主干用 ImageNet 预训练权重（默认关，保持历史结果可复现）")
+    ap.add_argument("--norm", default="none", choices=["none", "imagenet"],
+                    help="输入归一化：配 --pretrained 时用 imagenet（训练与推理必须同值）")
+    ap.add_argument("--init-verifier", default="results/weights/verifier_best.pdparams",
+                    help="从哪个验证器权重迁移主干（A/B 时指向新验证器）")
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--device", default="gpu", choices=["gpu", "cpu"])
     args = ap.parse_args()
@@ -58,11 +70,13 @@ def main():
     print("=" * 72)
     print(f"设备 {dev} | 图块 {args.in_size} | 类别 {num_classes} | "
           f"每 GT {args.per_gt} 个模拟候选 | 回归权重 {args.reg_weight}")
+    print(f"主干 {'ImageNet 预训练' if args.pretrained else '随机初始化'}"
+          f" | 输入归一化 {args.norm} | 回归损失 {args.reg_loss}")
 
     tr = RefineDataset(utils.ROOT, "train", args.in_size, args.per_gt,
-                       args.neg_per_img, seed=args.seed)
+                       args.neg_per_img, seed=args.seed, norm=args.norm)
     va = RefineDataset(utils.ROOT, "val", args.in_size, max(args.per_gt // 2, 2),
-                       args.neg_per_img, seed=args.seed)
+                       args.neg_per_img, seed=args.seed, norm=args.norm)
     tr_ld = paddle.io.DataLoader(tr, batch_size=args.batch_size, shuffle=True,
                                  drop_last=True, return_list=True)
     va_ld = paddle.io.DataLoader(va, batch_size=args.batch_size, shuffle=False,
@@ -70,11 +84,16 @@ def main():
     n_bg = sum(1 for s in tr.samples if s[2] == BG_CLASS)
     print(f"训练样本 {len(tr)}（背景 {n_bg} / 前景 {len(tr)-n_bg}）  验证样本 {len(va)}")
 
-    model = RegionRefiner(num_classes=num_classes, in_size=args.in_size)
-    vpath = utils.ROOT / "results/weights/verifier_best.pdparams"
+    model = RegionRefiner(num_classes=num_classes, in_size=args.in_size,
+                          pretrained=args.pretrained)
+    vpath = Path(args.init_verifier)
+    if not vpath.is_absolute():
+        vpath = utils.ROOT / vpath
     if vpath.exists():
         loaded, skipped = model.load_from_verifier(vpath)
-        print(f"从验证器迁移主干：加载 {len(loaded)} 个参数，跳过 {len(skipped)} 个")
+        print(f"从验证器迁移主干（{vpath.name}）：加载 {len(loaded)} 个参数，跳过 {len(skipped)} 个")
+    else:
+        print(f"未找到验证器权重 {vpath}，主干保持{'预训练' if args.pretrained else '随机'}初始化")
     n_param = sum(int(np.prod(p.shape)) for p in model.parameters())
     print(f"参数量 {n_param/1e4:.2f} 万")
 
@@ -84,6 +103,10 @@ def main():
                                     parameters=model.parameters(),
                                     weight_decay=paddle.regularizer.L2Decay(5e-4))
     cls_lossf = paddle.nn.CrossEntropyLoss()
+    # 框回归损失：l2 = 对归一化偏移的平方误差（历史默认）；
+    # 其余三种在解码后的框上直接算 IoU 系损失（reduction='none'，再按有 GT 的样本加权）
+    iou_lossf = (IoULoss(args.reg_loss, reduction="none")
+                 if args.reg_loss != "l2" else None)
 
     weight_dir = utils.resolve_dir("results/weights")
     log_dir = utils.resolve_dir("results/logs")
@@ -105,12 +128,20 @@ def main():
             y = b["cls"]
             delta = paddle.to_tensor(b["delta"])
             has_gt = paddle.to_tensor(b["has_gt"])
+            cand = paddle.to_tensor(b["cand"])
+            gt_box = paddle.to_tensor(b["gt"])
             logit, pred_d = model(x)
             loss_cls = cls_lossf(logit, y)
             # 只对前景样本算回归损失（背景没有可回归的目标框）
             w = has_gt.unsqueeze(-1)
             n_pos = paddle.clip(w.sum(), min=1.0)
-            loss_reg = (((pred_d - delta) ** 2) * w).sum() / n_pos / 4.0
+            if iou_lossf is None:
+                loss_reg = (((pred_d - delta) ** 2) * w).sum() / n_pos / 4.0
+            else:
+                # IoU 系损失：先把预测偏移解码成真实像素框，再和 GT 框逐对算 IoU
+                pred_box = decode_refine_batch(cand, pred_d)
+                per_box = iou_lossf(pred_box, gt_box)
+                loss_reg = (per_box * has_gt).sum() / n_pos
             loss = loss_cls + args.reg_weight * loss_reg
             loss.backward()
             paddle.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
@@ -159,6 +190,9 @@ def main():
         "epochs": args.epochs, "in_size": args.in_size, "batch_size": args.batch_size,
         "lr": args.lr, "per_gt": args.per_gt, "neg_per_img": args.neg_per_img,
         "reg_weight": args.reg_weight, "seed": args.seed,
+        "pretrained": bool(args.pretrained), "norm": args.norm,
+        "reg_loss": args.reg_loss,
+        "init_verifier": str(vpath.name),
         "params_wan": round(n_param / 1e4, 2),
         "train_samples": len(tr), "val_samples": len(va),
         "best_val_acc": best, "final_mean_iou_after_refine": ious,
@@ -187,12 +221,11 @@ def _eval_refine_iou(model, ds, in_size):
             if gt is None:
                 continue
             im = Image.open(img_p).convert("RGB")
-            from core.verifier import crop_with_margin
+            from core.verifier import crop_with_margin, prep_crop
             c = crop_with_margin(im, cand, ds.margin)
             if c is None:
                 continue
-            c = c.resize((in_size, in_size), Image.BILINEAR)
-            arr = np.transpose(np.asarray(c, dtype="float32") / 255.0, (2, 0, 1))
+            arr = prep_crop(c, in_size, getattr(ds, "norm", "none"))
             x = paddle.to_tensor(arr).unsqueeze(0)
             delta = model(x)[1].numpy()[0]
             ref = decode_refine(cand, delta, ds.img_size)

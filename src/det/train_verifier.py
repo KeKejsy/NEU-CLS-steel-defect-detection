@@ -44,6 +44,10 @@ def main():
     ap.add_argument("--pos-jitter", type=float, default=0.0,
                     help="正样本抖动幅度（0=直接用 GT 框）")
     ap.add_argument("--name", default="verifier", help="权重与日志前缀，便于 A/B")
+    ap.add_argument("--pretrained", action="store_true",
+                    help="主干用 ImageNet 预训练权重（默认关，保持历史结果可复现）")
+    ap.add_argument("--norm", default="none", choices=["none", "imagenet"],
+                    help="输入归一化：配 --pretrained 时用 imagenet（训练与推理必须同值）")
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--device", default="gpu", choices=["gpu", "cpu"])
     args = ap.parse_args()
@@ -57,14 +61,16 @@ def main():
     print("=" * 70)
     print(f"设备 {dev} | 图块尺寸 {args.in_size} | 类别数 {num_classes}"
           f"（{len(data_mod.CLASS_NAMES)} 缺陷 + 背景）")
+    print(f"主干 {'ImageNet 预训练' if args.pretrained else '随机初始化'}"
+          f" | 输入归一化 {args.norm}")
 
     tr_ds = VerifierDataset(utils.ROOT, "train", args.in_size, args.neg_per_img,
                             args.margin, args.seed, pos_jitter=args.pos_jitter,
-                            dilate_per_gt=args.dilate_per_gt)
+                            dilate_per_gt=args.dilate_per_gt, norm=args.norm)
     # 验证集用与训练相同的样本构成，指标才可比（但固定种子保证不随机变化）
     va_ds = VerifierDataset(utils.ROOT, "val", args.in_size, args.neg_per_img,
                             args.margin, args.seed, pos_jitter=args.pos_jitter,
-                            dilate_per_gt=args.dilate_per_gt)
+                            dilate_per_gt=args.dilate_per_gt, norm=args.norm)
     tr_ld = paddle.io.DataLoader(tr_ds, batch_size=args.batch_size, shuffle=True,
                                  drop_last=True, return_list=True)
     va_ld = paddle.io.DataLoader(va_ds, batch_size=args.batch_size, shuffle=False,
@@ -73,7 +79,8 @@ def main():
     n_bg = sum(1 for s in tr_ds.samples if s[2] == BG_CLASS)
     print(f"  其中背景 {n_bg} 个、缺陷 {len(tr_ds)-n_bg} 个")
 
-    model = DefectVerifier(num_classes=num_classes, in_size=args.in_size)
+    model = DefectVerifier(num_classes=num_classes, in_size=args.in_size,
+                           pretrained=args.pretrained)
     n_param = sum(int(np.prod(p.shape)) for p in model.parameters())
     print(f"参数量 {n_param/1e4:.2f} 万")
 
@@ -142,6 +149,7 @@ def main():
     summary = {
         "epochs": args.epochs, "in_size": args.in_size, "margin": args.margin,
         "batch_size": args.batch_size, "lr": args.lr, "seed": args.seed,
+        "pretrained": bool(args.pretrained), "norm": args.norm,
         "params_wan": round(n_param / 1e4, 2),
         "train_tiles": len(tr_ds), "val_tiles": len(va_ds),
         "best_val_acc": best, "total_sec": round(time.time() - t0, 1),

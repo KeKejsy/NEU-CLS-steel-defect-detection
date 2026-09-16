@@ -1,0 +1,16 @@
+{
+  "epochs": 30,
+  "in_size": 128,
+  "margin": 0.2,
+  "batch_size": 64,
+  "lr": 0.005,
+  "seed": 2026,
+  "pretrained": true,
+  "norm": "imagenet",
+  "params_wan": 258.67,
+  "train_tiles": 4142,
+  "val_tiles": 895,
+  "best_val_acc": 0.9564245810055866,
+  "total_sec": 174.0,
+  "weights": "results/weights/verifier_pre128_best.pdparams"
+}

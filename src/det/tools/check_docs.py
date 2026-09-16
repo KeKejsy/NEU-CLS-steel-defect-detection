@@ -45,13 +45,19 @@ def variants(x):
     return out
 
 
-def contains_value(text, value):
+def contains_value(text, value, min_dec=3):
     """判断文档里是否出现了该数值
 
     不能用简单的 `f"{value:.3f}" in text` —— 那会误命中：
     例如 value=0.88715 的三位写法 "0.887" 会匹配到文档里的 "0.8872"，
     而那是另一个不同的数值。所以这里改成**解析文档中所有数字再比较**，
     允许文档写法与真值之间有不超过半个末位的舍入差。
+
+    `min_dec`：只接受小数点后至少这么多位的文档数字。
+    为什么需要它（2026-09-16 实测踩到的坑）：早期版本对 2 位小数也放行
+    （容差 ±0.005），于是真值 0.1167 会被文档里随便一个 "0.12" 命中 ——
+    优化轮更新 README_det.md 时它因此**误报"全部命中"，而那份文档其实
+    一个测试集数字都没有**。默认 3 位（容差 ±0.0005）后这类假阳性才被堵住。
     """
     try:
         f = float(value)
@@ -64,8 +70,10 @@ def contains_value(text, value):
             dv = float(tok)
         except ValueError:
             continue
-        # 按文档里写了几位小数来定容差：写 3 位就允许 ±0.0005
         dec = len(tok.split(".")[1])
+        if dec < min_dec:
+            continue
+        # 按文档里写了几位小数来定容差：写 3 位就允许 ±0.0005
         tol = 0.5 * (10 ** -dec) + 1e-12
         if abs(dv - f) <= tol:
             return True
@@ -98,8 +106,19 @@ def main():
         facts["精修器验证准确率"] = r["best_val_acc"]
         facts["精修后平均 IoU"] = r["final_mean_iou_after_refine"]
 
-    for tag, label in (("val_fuse_final", "融合-验证集 mAP"),
-                       ("test_fuse_final", "融合-测试集 mAP"),
+    # 优化轮（2026-09-15）：ImageNet 预训练主干 + GIoU 回归 + 128 输入
+    v2 = jload(m / "verifier_pre128_train_summary.json")
+    if v2:
+        facts["验证器图块准确率(优化)"] = v2["best_val_acc"]
+    r2 = jload(m / "refiner_giou128_train_summary.json")
+    if r2:
+        facts["精修器验证准确率(优化)"] = r2["best_val_acc"]
+        facts["精修后平均 IoU(优化)"] = r2["final_mean_iou_after_refine"]
+
+    for tag, label in (("val_fuse_final", "融合-验证集 mAP(旧流水线)"),
+                       ("val_fuse_pre128", "融合-验证集 mAP(优化版)"),
+                       ("test_fuse_final", "融合-测试集 mAP(旧流水线)"),
+                       ("test_fuse_pre128", "融合-测试集 mAP(优化版)"),
                        ("val_verifier", "仅验证器-验证集 mAP"),
                        ("val_refiner", "仅精修器-验证集 mAP"),
                        ("yolov3_eval2stage_window_test", "两阶段基线-测试集 mAP"),
@@ -108,11 +127,13 @@ def main():
         if d:
             facts[label] = d["map50"]
 
-    # 逐类 AP 以「完整流水线跑出的最终测试集结果」为准
-    d = jload(m / "test_fuse_final.json") or jload(m / "test_fuse_best.json")
-    if d:
-        for c, val in d["per_class"].items():
-            facts[f"测试集 {c} AP"] = val["ap50"]
+    # 逐类 AP：优化版以新跑出的验证/测试集结果为准；旧流水线数字保留作对比基线
+    for tag, pref in (("val_fuse_pre128", "验证集(优化)"), ("test_fuse_pre128", "测试集(优化)"),
+                      ("val_fuse_final", "验证集(旧)"), ("test_fuse_final", "测试集(旧)")):
+        d = jload(m / f"{tag}.json") or (jload(m / "test_fuse_best.json") if tag == "test_fuse_final" else None)
+        if d:
+            for c, val in d["per_class"].items():
+                facts[f"{pref} {c} AP"] = val["ap50"]
 
     print("=" * 74)
     print("成员 C · 文档一致性校验")
@@ -122,7 +143,7 @@ def main():
         v = val if not isinstance(val, float) else f"{val:.4f}"
         print(f"  {k:22s} = {v}")
 
-    print("\n各文档是否包含上述数字（接受 2/3/4 位小数等合法写法）：")
+    print("\n各文档是否包含上述数字（只接受小数点后 ≥3 位的文档写法，容差 ±0.0005）：")
     all_ok = True
     for doc in docs:
         p = utils.ROOT / doc

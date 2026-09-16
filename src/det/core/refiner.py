@@ -45,7 +45,7 @@ import paddle.nn.functional as F
 from PIL import Image
 
 from .data import CLASS_NAMES
-from .verifier import BG_CLASS, crop_with_margin
+from .verifier import BG_CLASS, crop_with_margin, prep_crop
 
 # 训练用的「模拟候选」抖动范围。
 #
@@ -91,12 +91,13 @@ class RefineDataset(paddle.io.Dataset):
     """
 
     def __init__(self, root, split="train", in_size=96, per_gt=6, neg_per_img=3,
-                 margin=0.15, seed=2026, img_size=200):
+                 margin=0.15, seed=2026, img_size=200, norm="none"):
         super().__init__()
         self.root = Path(root)
         self.in_size = in_size
         self.margin = margin
         self.img_size = img_size
+        self.norm = norm
         self.img_dir = self.root / "dataset" / "det" / "JPEGImages"
         self.ann_dir = self.root / "dataset" / "det" / "Annotations"
         names = [ln.strip() for ln in
@@ -190,14 +191,18 @@ class RefineDataset(paddle.io.Dataset):
         crop = crop_with_margin(im, cand, self.margin)
         if crop is None:
             crop = im
-        crop = crop.resize((self.in_size, self.in_size), Image.BILINEAR)
-        arr = np.transpose(np.asarray(crop, dtype="float32") / 255.0, (2, 0, 1))
+        arr = prep_crop(crop, self.in_size, self.norm)
         if gt is None:
             delta = np.zeros(4, dtype="float32")
         else:
             delta = self.encode(cand, gt, self.img_size)
         return {"image": arr, "cls": np.int64(cls_id), "delta": delta,
-                "has_gt": np.float32(0.0 if gt is None else 1.0)}
+                "has_gt": np.float32(0.0 if gt is None else 1.0),
+                # 候选框与真值框（像素 xyxy）：用 IoU 系损失训练时需要，
+                # 因为 IoU 必须在「解码后的框」上算，不能只看归一化偏移。
+                "cand": np.asarray(cand, dtype="float32"),
+                "gt": np.asarray(gt if gt is not None else [0.0, 0.0, 0.0, 0.0],
+                                 dtype="float32")}
 
 
 class RegionRefiner(nn.Layer):
@@ -205,14 +210,19 @@ class RegionRefiner(nn.Layer):
 
     主干沿用验证器的结构（MobileNetV3_small 到 1024 维），
     这样 `verifier_best.pdparams` 的主干权重可以直接迁移过来，训练更快也更稳。
+
+    `pretrained=True`（A/B 实验开关，默认 False 保持历史行为）：主干加载 ImageNet
+    预训练权重；与验证器同理，此时输入归一化必须设为 "imagenet"（见 prep_crop）。
     """
 
     FEATURE_DIM = 1024
 
-    def __init__(self, num_classes=7, in_size=96, dropout=0.3):
+    def __init__(self, num_classes=7, in_size=96, dropout=0.3, pretrained=False):
         super().__init__()
         from paddle.vision.models import mobilenet_v3_small
-        self.trunk = mobilenet_v3_small(num_classes=self.FEATURE_DIM)
+        self.trunk = mobilenet_v3_small(pretrained=pretrained,
+                                        num_classes=self.FEATURE_DIM)
+        self.pretrained = bool(pretrained)
         self.in_size = in_size
         self.drop = nn.Dropout(dropout)
         self.cls_head = nn.Linear(self.FEATURE_DIM, num_classes)
@@ -257,15 +267,35 @@ def decode_refine(cand_px, delta, img_size):
     return [ncx - nw / 2, ncy - nh / 2, ncx + nw / 2, ncy + nh / 2]
 
 
+def decode_refine_batch(cand, delta):
+    """`decode_refine` 的向量化张量版：cand/delta 均为 (N,4)，返回精修后框 (N,4) 像素
+
+    用 IoU 系损失训练精修器时必须在解码后的框上算 IoU，所以需要可求导的批量版本。
+    两处实现（numpy 版与张量版）必须保持一致，否则训练目标与推理行为会错位。
+    """
+    cx = (cand[:, 0] + cand[:, 2]) / 2
+    cy = (cand[:, 1] + cand[:, 3]) / 2
+    w = cand[:, 2] - cand[:, 0]
+    h = cand[:, 3] - cand[:, 1]
+    ncx = cx + delta[:, 0] * w
+    ncy = cy + delta[:, 1] * h
+    nw = w * paddle.exp(paddle.clip(delta[:, 2], -2.0, 2.0))
+    nh = h * paddle.exp(paddle.clip(delta[:, 3], -2.0, 2.0))
+    return paddle.stack([ncx - nw / 2, ncy - nh / 2,
+                         ncx + nw / 2, ncy + nh / 2], axis=1)
+
+
 class RefinerInfer:
     """把精修器包成「给一批候选框打分 + 精修」的工具"""
 
-    def __init__(self, model, in_size=96, margin=0.15, batch=256, img_size=200):
+    def __init__(self, model, in_size=96, margin=0.15, batch=256, img_size=200,
+                 norm="none"):
         self.model = model
         self.in_size = in_size
         self.margin = margin
         self.batch = batch
         self.img_size = img_size
+        self.norm = norm
         self.model.eval()
 
     @paddle.no_grad()
@@ -280,8 +310,7 @@ class RefinerInfer:
             c = crop_with_margin(im, b, self.margin)
             if c is None:
                 c = im
-            c = c.resize((self.in_size, self.in_size), Image.BILINEAR)
-            crops.append(np.transpose(np.asarray(c, dtype="float32") / 255.0, (2, 0, 1)))
+            crops.append(prep_crop(c, self.in_size, self.norm))
         probs, deltas = [], []
         for i in range(0, n, self.batch):
             chunk = paddle.to_tensor(np.stack(crops[i:i + self.batch], axis=0))

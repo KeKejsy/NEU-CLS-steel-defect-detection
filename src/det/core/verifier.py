@@ -48,6 +48,35 @@ from .data import CLASS_NAMES, CLASS_NAMES_CN
 # 背景类别的编号（放在最后，输出维度 = 6 类缺陷 + 1 背景）
 BG_CLASS = len(CLASS_NAMES)
 
+# --------------------------------------------------------------------------- #
+# 输入归一化：主干是否用 ImageNet 预训练权重，决定了输入该不该按 ImageNet 口径归一化
+# --------------------------------------------------------------------------- #
+# 背景：验证器/精修器的主干是 `paddle.vision.models.mobilenet_v3_small`。
+# 之前一直用 `pretrained=False`（随机初始化），输入只做 /255，这是自洽的；
+# 但一旦换成 ImageNet 预训练权重，输入分布就必须与预训练时一致，否则预训练特征
+# 会被「错位」的输入分布稀释。两种模式用同一个开关切换，训练与推理必须同值 ——
+# 所以把它们都收敛到下面这个唯一的 `prep_crop()`，避免两处实现走样。
+IMAGENET_MEAN = np.asarray([0.485, 0.456, 0.406], dtype="float32")
+IMAGENET_STD = np.asarray([0.229, 0.224, 0.225], dtype="float32")
+
+# 归一化模式："none" = 只 /255（与历史权重一致）；"imagenet" = 再减均值除方差
+NORM_MODES = ("none", "imagenet")
+
+
+def prep_crop(crop: Image.Image, in_size: int = 96, norm: str = "none"):
+    """裁剪块 -> (3, in_size, in_size) float32，训练与推理共用的唯一入口
+
+    norm="none"     只做 /255（历史权重用的就是这个，默认值保证旧结果可复现）
+    norm="imagenet" 追加 ImageNet 均值方差归一化（配 pretrained=True 的主干）
+    """
+    if norm not in NORM_MODES:
+        raise ValueError(f"未知的归一化模式 {norm!r}，可选：{NORM_MODES}")
+    crop = crop.resize((in_size, in_size), Image.BILINEAR)
+    arr = np.asarray(crop, dtype="float32") / 255.0
+    if norm == "imagenet":
+        arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
+    return np.ascontiguousarray(np.transpose(arr, (2, 0, 1)), dtype="float32")
+
 
 def crop_with_margin(im: Image.Image, box_px, margin=0.2):
     """按像素 xyxy 裁剪，并向外扩 margin 比例（越界则夹住）"""
@@ -72,15 +101,23 @@ class DefectVerifier(nn.Layer):
     实现说明：直接复用 `paddle.vision.models.mobilenet_v3_small`，
     把它的分类头输出（1024 维）当作特征，再接自己的线性分类头。
     这样不依赖 paddle 内部的 `features` 等私有结构，升级版本也不容易坏。
+
+    `pretrained=True`（A/B 实验开关，默认 False 保持历史行为）：
+    加载 ImageNet 预训练权重。此时 num_classes=1024 恰好与 ImageNet 的
+    `classifier.0`（576->1024）同形，能吃到大部分预训练特征；
+    只有最后的 `classifier.3`（1024->1000）形状不符会被跳过 —— 而它本来就要重训。
+    配 `pretrained=True` 时必须同时把输入归一化设为 "imagenet"（见 prep_crop）。
     """
 
     FEATURE_DIM = 1024
 
-    def __init__(self, num_classes=7, in_size=96, dropout=0.3):
+    def __init__(self, num_classes=7, in_size=96, dropout=0.3, pretrained=False):
         super().__init__()
         from paddle.vision.models import mobilenet_v3_small
         # num_classes=1024 时，这个网络本身就等于「特征提取 + 池化 + 1024 维输出」
-        self.trunk = mobilenet_v3_small(num_classes=self.FEATURE_DIM)
+        self.trunk = mobilenet_v3_small(pretrained=pretrained,
+                                        num_classes=self.FEATURE_DIM)
+        self.pretrained = bool(pretrained)
         self.in_size = in_size
         self.drop = nn.Dropout(dropout)
         self.fc = nn.Linear(self.FEATURE_DIM, num_classes)
@@ -113,13 +150,14 @@ class VerifierDataset(paddle.io.Dataset):
     """
 
     def __init__(self, root, split="train", in_size=96, neg_per_img=1, margin=0.2,
-                 seed=2026, pos_jitter=0.0, dilate_per_gt=0):
+                 seed=2026, pos_jitter=0.0, dilate_per_gt=0, norm="none"):
         super().__init__()
         self.root = Path(root)
         self.in_size = in_size
         self.margin = margin
         self.pos_jitter = pos_jitter
         self.dilate_per_gt = dilate_per_gt
+        self.norm = norm
         self.img_dir = self.root / "dataset" / "det" / "JPEGImages"
         self.ann_dir = self.root / "dataset" / "det" / "Annotations"
         names = [ln.strip() for ln in
@@ -213,20 +251,19 @@ class VerifierDataset(paddle.io.Dataset):
         crop = crop_with_margin(im, box, self.margin)
         if crop is None:
             crop = im
-        crop = crop.resize((self.in_size, self.in_size), Image.BILINEAR)
-        arr = np.asarray(crop, dtype="float32") / 255.0
-        arr = np.transpose(arr, (2, 0, 1))
+        arr = prep_crop(crop, self.in_size, self.norm)
         return {"image": arr, "label": np.int64(label)}
 
 
 class VerifierInfer:
     """把验证器包成「给一批候选框打分」的工具，供 eval/viz 复用"""
 
-    def __init__(self, model, in_size=96, margin=0.2, batch=64):
+    def __init__(self, model, in_size=96, margin=0.2, batch=64, norm="none"):
         self.model = model
         self.in_size = in_size
         self.margin = margin
         self.batch = batch
+        self.norm = norm
         self.model.eval()
 
     @paddle.no_grad()
@@ -245,8 +282,7 @@ class VerifierInfer:
             c = crop_with_margin(im, px, self.margin)
             if c is None:
                 c = im
-            c = c.resize((self.in_size, self.in_size), Image.BILINEAR)
-            crops.append(np.transpose(np.asarray(c, dtype="float32") / 255.0, (2, 0, 1)))
+            crops.append(prep_crop(c, self.in_size, self.norm))
         out = []
         for i in range(0, n, self.batch):
             chunk = paddle.to_tensor(np.stack(crops[i:i + self.batch], axis=0))

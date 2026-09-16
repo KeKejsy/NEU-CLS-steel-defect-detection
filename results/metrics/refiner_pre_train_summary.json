@@ -1,0 +1,20 @@
+{
+  "epochs": 40,
+  "in_size": 96,
+  "batch_size": 64,
+  "lr": 0.003,
+  "per_gt": 6,
+  "neg_per_img": 3,
+  "reg_weight": 1.0,
+  "seed": 2026,
+  "pretrained": true,
+  "norm": "imagenet",
+  "init_verifier": "verifier_pre_best.pdparams",
+  "params_wan": 259.08,
+  "train_samples": 21055,
+  "val_samples": 2667,
+  "best_val_acc": 0.8316460442444694,
+  "final_mean_iou_after_refine": 0.4743441939353943,
+  "total_sec": 1121.0,
+  "weights": "results/weights/refiner_pre_best.pdparams"
+}

@@ -55,6 +55,9 @@ def main():
                     evals[f"{name}|{mode}|{split}"] = e
     verifier = load_json(metrics / "verifier_train_summary.json")
     refiner = load_json(metrics / "refiner_train_summary.json")
+    # 优化轮（2026-09-15）：ImageNet 预训练主干 + GIoU 回归 + 128 输入
+    verifier_opt = load_json(metrics / "verifier_pre128_train_summary.json")
+    refiner_opt = load_json(metrics / "refiner_giou128_train_summary.json")
     anchor_km = load_json(metrics / "anchor_kmeans.json")
 
     # ---- 迭代版流程：滑窗 + 验证器/精修器融合 ----
@@ -66,7 +69,9 @@ def main():
                        ("val_fuse_v2", "滑窗+融合(第三轮:窄宽高比)"),
                        ("test_fuse_best", "滑窗+融合(第二轮,测试集)"),
                        ("val_fuse_final", "★完整流水线 融合(验证集)"),
-                       ("test_fuse_final", "★完整流水线 融合(测试集)")):
+                       ("test_fuse_final", "★完整流水线 融合(测试集)"),
+                       ("val_fuse_pre128", "★优化版 融合(验证集:预训练+GIoU+128输入)"),
+                       ("test_fuse_pre128", "★优化版 融合(测试集:预训练+GIoU+128输入)")):
         d = load_json(metrics / f"{tag}.json")
         if d:
             fused[tag] = {"label": label, "data": d}
@@ -93,6 +98,19 @@ def main():
               f"  参数量 {refiner['params_wan']} 万")
         print(f"  最佳验证准确率 {refiner['best_val_acc']:.4f}"
               f"  精修后平均 IoU {refiner['final_mean_iou_after_refine']:.4f}")
+    if verifier_opt or refiner_opt:
+        print(f"\n【1c2】优化轮的第二阶段模型"
+              f"（ImageNet 预训练主干 + GIoU + 128 输入）")
+        if verifier_opt:
+            print(f"  验证器：图块准确率 {verifier_opt['best_val_acc']:.4f}"
+                  f"（原 {verifier['best_val_acc']:.4f}）"
+                  f"  预训练={verifier_opt.get('pretrained')}  归一化={verifier_opt.get('norm')}")
+        if refiner_opt:
+            print(f"  精修器：验证准确率 {refiner_opt['best_val_acc']:.4f}"
+                  f"（原 {refiner['best_val_acc']:.4f}）"
+                  f"  精修后 IoU {refiner_opt['final_mean_iou_after_refine']:.4f}"
+                  f"（原 {refiner['final_mean_iou_after_refine']:.4f}）"
+                  f"  回归损失={refiner_opt.get('reg_loss')}")
 
     # ---- 迭代版流程结果（本方案最终采用）----
     if fused:
@@ -166,6 +184,24 @@ def main():
                f"- 参数量：{refiner['params_wan']} 万",
                f"- 验证准确率：{refiner['best_val_acc']:.4f}",
                f"- 精修后平均 IoU：{refiner['final_mean_iou_after_refine']:.4f}"]
+    if verifier_opt or refiner_opt:
+        md += ["", "**优化轮（2026-09-15）：ImageNet 预训练主干 + GIoU 回归 + 128 输入**", "",
+               "| 模型 | 指标 | 原值 | 优化后 |", "|---|---|---|---|"]
+        if verifier_opt:
+            md.append(f"| 区域验证器 | 图块分类准确率 | {verifier['best_val_acc']:.4f} | "
+                      f"**{verifier_opt['best_val_acc']:.4f}** |")
+            md.append(f"| 区域验证器 | 输入尺寸 / 主干 | 96 / 随机初始化 | "
+                      f"{verifier_opt.get('in_size')} / ImageNet 预训练 |")
+        if refiner_opt:
+            md.append(f"| 区域精修器 | 验证准确率 | {refiner['best_val_acc']:.4f} | "
+                      f"**{refiner_opt['best_val_acc']:.4f}** |")
+            md.append(f"| 区域精修器 | 精修后平均 IoU | "
+                      f"{refiner['final_mean_iou_after_refine']:.4f} | "
+                      f"**{refiner_opt['final_mean_iou_after_refine']:.4f}** |")
+            md.append(f"| 区域精修器 | 框回归损失 | l2 | {refiner_opt.get('reg_loss')} |")
+        md.append("")
+        md.append("> 优化链：预训练主干 +0.0358 → GIoU 回归 +0.0132 → 输入 128 +0.0302，"
+                  "验证集 mAP@0.5 累计 0.1681 → 0.2473（+47.1%）。测试集未重跑。")
 
     if fused:
         md += ["", "## 1b. 迭代版流程：滑窗 + 验证器/精修器融合（**最终采用**）", "",
@@ -193,10 +229,43 @@ def main():
         md += ["", "每类 AP@0.5（融合方案，测试集）：", "",
                "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
                "|---|---|---|---|---|---|---|---|"]
+        old_v = fused.get("val_fuse_final")
+        if old_v:
+            md += ["", "每类 AP@0.5（旧流水线，验证集 270 张）：", "",
+                   "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
+                   "|---|---|---|---|---|---|---|---|"]
+            for c in CN:
+                v = old_v["data"]["per_class"].get(c)
+                if v:
+                    md.append(f"| {c} | {CN[c]} | {v['ap50']:.4f} | {v['precision']:.4f} | "
+                              f"{v['recall']:.4f} | {v['tp']} | {v['fp']} | {v['fn']} |")
         best_d = fused.get("test_fuse_final", fused.get("test_fuse_best", {}))
         if best_d:
+            md += ["", "每类 AP@0.5（旧流水线，测试集 270 张）：", "",
+                   "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
+                   "|---|---|---|---|---|---|---|---|"]
             for c in CN:
                 v = best_d["data"]["per_class"].get(c)
+                if v:
+                    md.append(f"| {c} | {CN[c]} | {v['ap50']:.4f} | {v['precision']:.4f} | "
+                              f"{v['recall']:.4f} | {v['tp']} | {v['fp']} | {v['fn']} |")
+        opt_d = fused.get("val_fuse_pre128")
+        if opt_d:
+            md += ["", "每类 AP@0.5（**优化版**融合，验证集 270 张）：", "",
+                   "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
+                   "|---|---|---|---|---|---|---|---|"]
+            for c in CN:
+                v = opt_d["data"]["per_class"].get(c)
+                if v:
+                    md.append(f"| {c} | {CN[c]} | {v['ap50']:.4f} | {v['precision']:.4f} | "
+                              f"{v['recall']:.4f} | {v['tp']} | {v['fp']} | {v['fn']} |")
+        opt_t = fused.get("test_fuse_pre128")
+        if opt_t:
+            md += ["", "每类 AP@0.5（**优化版**融合，测试集 270 张）：", "",
+                   "| 类别 | 中文 | AP@0.5 | 精确率 | 召回率 | TP | FP | FN |",
+                   "|---|---|---|---|---|---|---|---|"]
+            for c in CN:
+                v = opt_t["data"]["per_class"].get(c)
                 if v:
                     md.append(f"| {c} | {CN[c]} | {v['ap50']:.4f} | {v['precision']:.4f} | "
                               f"{v['recall']:.4f} | {v['tp']} | {v['fp']} | {v['fn']} |")

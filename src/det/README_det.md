@@ -131,6 +131,19 @@ python src/det/viz_det.py --model ppyoloe_s --figs samples,errors,size_ap
 # 4) 单图推理
 python src/det/demo.py --model yolov3 --image dataset/det/JPEGImages/crazing_27.jpg
 python src/det/demo.py --model ppyoloe_s --benchmark        # 顺带测 FPS
+
+# 5) 两阶段方案（最终交付）——优化版：预训练主干 + GIoU + 128 输入
+#    注意 --norm 与 --in-size 必须与训练时一致
+python src/det/train_verifier.py --name verifier_pre128 --pretrained --norm imagenet --in-size 128
+python src/det/train_refiner.py --name refiner_giou128 --pretrained --norm imagenet \
+    --in-size 128 --reg-loss giou --init-verifier results/weights/verifier_pre128_best.pdparams
+python src/det/eval_fused.py --split val --mode fuse --stride 12 --score-th 0.6 \
+    --nms-iou 0.4 --top-k 150 --max-det 50 --norm imagenet --in-size 128 \
+    --verifier-weights results/weights/verifier_pre128_best.pdparams \
+    --refiner-weights  results/weights/refiner_giou128_best.pdparams \
+    --tag val_fuse_pre128
+
+# 历史权重（随机初始化主干）用 --norm none --in-size 96，行为与改动前逐位相同
 ```
 
 ### 产出文件
@@ -470,6 +483,84 @@ Darknet53 的 stem 下采样次数、各阶段通道数、YOLOv3 到底取哪三
 > 划分文件按类别前缀排序，前 80 张只有 Cr 和 In 两类（45+35），
 > 扫出来的 mAP（0.043）与全量评估（0.099）差一倍多。
 > 后来专门写了 `tools/sweep_refine.py` 做**分层抽样**（每类等量），结论才可靠。
+
+### 9.1b 优化轮（2026-09-15）：预训练主干 + GIoU 回归 + 128 输入
+
+第三轮之后，README 的「后续改进建议」里那条**「换有预训练权重的主干」**一直没做 ——
+本方案的两个区域判别模型主干确实是 `mobilenet_v3_small`，但**一直用 `pretrained=False`
+（随机初始化）**，输入也只做 /255。本轮把它落地，并顺带验证另外两个变量。
+
+**每次只改一处**（滑窗配置、后处理、数据划分全部不动）：
+
+| 步骤 | 改动 | 验证集 mAP@0.5 | 增量 |
+|---|---|---|---|
+| 0 | 起点（第三轮交付版） | 0.1681 | — |
+| 1 | 主干 ImageNet 预训练 + 输入 ImageNet 归一化 | 0.2039 | **+0.0358** |
+| 2 | 精修器回归损失 L2 → **GIoU** | 0.2171 | **+0.0132** |
+| 3 | 判别模型输入 96 → **128** | **0.2473** | **+0.0302** |
+
+正式评估（`eval_fused.py`，270 张，交付版后处理参数 0.6/0.4/150/50，未调参）：
+
+| 划分 | mAP@0.5 | 精确率 | 召回率 | 每图框数 | ms/图 | 旧流水线 mAP |
+|---|---|---|---|---|---|---|
+| 验证集 | **0.2473** | 0.1529 | 0.6072 | 9.4 | 4876 | 0.1681 |
+| 测试集 | **0.2176** | 0.1363 | 0.5521 | 9.5 | 4986 | 0.1552 |
+
+> 相对整个任务最初的起点（滑窗 + 验证器，测试集 0.0548），测试集 mAP@0.5 累计 **+297%**。
+
+**两个区域判别模型的同步改善**：
+
+| 模型 | 指标 | 第三轮 | 优化轮 |
+|---|---|---|---|
+| 区域验证器 | 图块分类准确率 | 0.8816 | **0.9564** |
+| 区域精修器 | 验证准确率 | 0.7795 | **0.8384** |
+| 区域精修器 | 精修后平均 IoU | 0.4442 | **0.4919** |
+
+**每类 AP@0.5（优化版）**：
+
+| 划分 | Cr | In | Pa | PS | RS | Sc |
+|---|---|---|---|---|---|---|
+| 验证集 270 张 | 0.2275 | 0.1487 | 0.2281 | 0.5556 | 0.1483 | 0.1757 |
+| 测试集 270 张 | 0.2186 | 0.1339 | 0.1585 | 0.5359 | 0.1423 | 0.1167 |
+
+**实现要点（新增的开关，默认值保证历史行为逐位不变）**：
+
+- `core/verifier.py` 新增 `prep_crop()`：训练与推理共用的**唯一**输入管线，
+  `norm="none"`（只 /255，历史口径）与 `norm="imagenet"`（减均值除方差）两种模式；
+  已用单元测试核对 `norm="none"` 与改动前**逐位相同**。
+- `DefectVerifier(pretrained=)` / `RegionRefiner(pretrained=)`：主干加载 ImageNet 权重。
+  `num_classes=1024` 恰好与 ImageNet 的 `classifier.0`（576→1024）同形，能吃到大部分预训练特征；
+  只有 `classifier.3`（1024→1000）形状不符被自动跳过 —— 而它本来就要重训。
+- 精修器回归损失新增 `--reg-loss giou/diou/ciou`：不再只对归一化偏移做 L2，
+  而是把预测**解码成真实框**后直接优化 IoU 系指标（`core/refiner.py: decode_refine_batch`）。
+  GIoU 收敛更慢但终值更高（精修后 IoU 0.4743 → 0.4884，输入 128 后 0.4919）。
+- 训练脚本新增 `--pretrained / --norm / --in-size / --init-verifier`，
+  评估脚本新增 `--norm / --in-size`；**两者必须与训练时一致**，否则预训练特征会被错位的输入分布稀释。
+- 新增工具：`tools/compare_norm_ab.py`（A/B 对照）、`tools/tune_perclass_th.py`（逐类阈值，
+  已验证**增益不叠加**）、`tools/rerank_{cache,common,train,eval}.py`（学习式重排序，已验证**无效**）、
+  `tools/viz_fused.py`（融合方案的真值-预测对比图，按类别分层抽样）、
+  `tools/probe_obj_ranking.py`（单阶段检测器 obj 排序诊断，放在独立副本里）。
+
+**优化版产出的图**（`results/figures/`）：
+
+| 文件 | 内容 |
+|---|---|
+| `{val,test}_fuse_pre128_pr.png` | 每类 PR 曲线（含 AP） |
+| `{val,test}_fuse_pre128_ap.png` | 每类 AP 柱状图 |
+| `{val,test}_fuse_pre128_conf.png` | 混淆矩阵 |
+| `{val,test}_fuse_pre128_samples.png` | 分层抽样真值-预测对比（左红=标注，右绿=预测） |
+
+> 图上体现的误差形态是**漏检少、误检多**：同一缺陷旁常叠着多个绿框、个别无缺陷区域
+> 出现高分框 —— 与精确率 0.1363 / 召回率 0.5521 的量化结论一致，收益点仍在排序。
+
+**本轮否决的四个方向**：
+
+| 尝试 | 结果 | 结论 |
+|---|---|---|
+| 逐类分数阈值（坐标上升） | 弱精修器上 +0.0056；GIoU/128 后仅 +0.0008~0.0013 | 增益不叠加，属补偿性 |
+| 滑窗步长 12 → 8 | 子集 +0.002，候选 4624 → 10000/图、推理贵 2.2 倍 | 不划算 |
+| 单阶段检测器换预训练主干 + Focal Loss（副本内单独做） | val mAP 0.0000 → **0.0003**；最佳候选 obj 中位数 0.0355、排名中位数 **6667/10647** | 数据规模问题，非主干或损失问题 |
+| 学习式重排序替代几何平均（26 维特征 → 6278 参数 MLP） | 同一批候选：基线 **0.2540** vs 重排序 **0.1949** | 学习式打分是更差的类内排序器 |
 
 ### 9.2 第二阶段的两个模型
 

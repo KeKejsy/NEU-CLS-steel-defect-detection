@@ -1,0 +1,21 @@
+{
+  "epochs": 40,
+  "in_size": 96,
+  "batch_size": 64,
+  "lr": 0.003,
+  "per_gt": 6,
+  "neg_per_img": 3,
+  "reg_weight": 1.0,
+  "seed": 2026,
+  "pretrained": true,
+  "norm": "imagenet",
+  "reg_loss": "giou",
+  "init_verifier": "verifier_pre_best.pdparams",
+  "params_wan": 259.08,
+  "train_samples": 21055,
+  "val_samples": 2667,
+  "best_val_acc": 0.8282714660667416,
+  "final_mean_iou_after_refine": 0.48842594027519226,
+  "total_sec": 1083.8,
+  "weights": "results/weights/refiner_giou_best.pdparams"
+}

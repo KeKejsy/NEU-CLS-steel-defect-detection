@@ -105,6 +105,11 @@ def main():
                     help="精修器权重路径（便于 A/B 对比不同版本）")
     ap.add_argument("--verifier-weights", default="results/weights/verifier_best.pdparams",
                     help="验证器权重路径（便于 A/B 对比不同版本）")
+    ap.add_argument("--norm", default="none", choices=["none", "imagenet"],
+                    help="输入归一化，必须与被评估权重训练时一致："
+                         "历史权重用 none；ImageNet 预训练主干用 imagenet")
+    ap.add_argument("--in-size", type=int, default=96,
+                    help="判别模型输入尺寸，必须与训练时一致")
     ap.add_argument("--device", default="gpu", choices=["gpu", "cpu"])
     args = ap.parse_args()
 
@@ -117,20 +122,20 @@ def main():
     if not rw.exists():
         raise SystemExit(f"找不到精修器权重：{rw}")
 
-    refiner = RegionRefiner(num_classes=len(CN) + 1, in_size=96)
+    refiner = RegionRefiner(num_classes=len(CN) + 1, in_size=args.in_size)
     refiner.set_state_dict(paddle.load(str(rw)))
     refiner.eval()
-    rinf = RefinerInfer(refiner, in_size=96, margin=0.15, batch=256)
+    rinf = RefinerInfer(refiner, in_size=args.in_size, margin=0.15, batch=256, norm=args.norm)
 
     vw = Path(args.verifier_weights)
     if not vw.is_absolute():
         vw = utils.ROOT / vw
     if not vw.exists():
         raise SystemExit(f"找不到验证器权重：{vw}")
-    verifier = DefectVerifier(num_classes=len(CN) + 1, in_size=96)
+    verifier = DefectVerifier(num_classes=len(CN) + 1, in_size=args.in_size)
     verifier.set_state_dict(paddle.load(str(vw)))
     verifier.eval()
-    vinf = VerifierInfer(verifier, batch=512)
+    vinf = VerifierInfer(verifier, in_size=args.in_size, batch=512, norm=args.norm)
 
     ds, _ = data_mod.build_loader(utils.ROOT, args.split, 416, 8,
                                   augment=False, shuffle=False)
@@ -143,6 +148,7 @@ def main():
     print("=" * 80)
     print(f"滑窗步长 {args.stride} | 分数阈值 {args.score_th} | NMS IoU {args.nms_iou} | "
           f"最多 {args.max_det} 框/图")
+    print(f"权重：验证器 {vw.name} / 精修器 {rw.name} | 输入归一化 {args.norm}")
 
     preds = []
     t0 = time.time()
@@ -228,6 +234,8 @@ def main():
 
     report = {
         "pipeline": "window+verifier+refiner", "mode": args.mode, "split": args.split,
+        "norm": args.norm,
+        "weights": {"verifier": vw.name, "refiner": rw.name},
         "params": {"stride": args.stride, "score_th": args.score_th,
                    "nms_iou": args.nms_iou, "max_det": args.max_det},
         "num_images": len(ds), "ms_per_image": round(cost / len(ds) * 1000, 1),
