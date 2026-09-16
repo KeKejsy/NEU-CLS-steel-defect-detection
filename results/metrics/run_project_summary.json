@@ -1,38 +1,45 @@
 {
-  "time": "2026-09-16 15:58:27",
+  "time": "2026-09-16 16:34:20",
   "profile": "eval",
   "device": "gpu",
-  "device_reason": null,
+  "device_reason": "CUDA 可用（paddle 3.2.0）",
   "in_size": 128,
   "norm": "imagenet",
   "pretrained": true,
-  "quick": true,
-  "verifier_epochs": 1,
-  "refiner_epochs": 1,
-  "total_sec": 312.3,
+  "quick": false,
+  "verifier_epochs": 30,
+  "refiner_epochs": 40,
+  "total_sec": 0.0,
   "stages": [
     {
-      "id": "region_train",
-      "title": "C · 区域判别模型训练（验证器 + 精修器，最终方案核心）",
-      "status": "ok",
-      "sec": 80.18794751167297,
-      "extra": ""
+      "id": "data",
+      "title": "A · 数据自检（23 项）",
+      "status": "skipped(done)",
+      "sec": 0,
+      "extra": "上次 2026-09-16 15:52:35"
     },
     {
-      "id": "fused_eval",
-      "title": "C · 融合方案正式评估（验证集 + 测试集）",
-      "status": "ok",
-      "sec": 192.95905804634094,
-      "extra": ""
+      "id": "tools",
+      "title": "D · 工具链（汇总表 + 对比图）",
+      "status": "skipped(done)",
+      "sec": 0,
+      "extra": "上次 2026-09-16 15:52:36"
     },
     {
-      "id": "viz",
-      "title": "C · 真值-预测对比图",
-      "status": "ok",
-      "sec": 31.195106267929077,
-      "extra": ""
+      "id": "summarize",
+      "title": "汇总：生成 det_summary.md/json",
+      "status": "skipped(done)",
+      "sec": 0,
+      "extra": "上次 2026-09-16 15:52:38"
+    },
+    {
+      "id": "verify",
+      "title": "校验：文档与产物一致性",
+      "status": "skipped(done)",
+      "sec": 0,
+      "extra": "上次 2026-09-16 15:52:40"
     }
   ],
   "python": "C:\\Users\\htt22\\miniconda3\\envs\\paddle_env\\python.exe",
-  "cwd": "C:\\Users\\htt22\\Desktop\\HTR\\26summer rgzn\\NEU-CLS-steel-defect-detection 123"
+  "cwd": "C:\\Users\\htt22\\Desktop\\HTR\\26summer rgzn\\NEU-CLS-steel-defect-detection"
 }
