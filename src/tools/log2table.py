@@ -25,9 +25,11 @@ for model_name, filename in cls_files.items():
             data = json.load(f)
         params = data.get("num_params", "未知")
         acc = data.get("best_val_acc", "未知")
-        table.append(["分类", model_name, params, f"准确率 {acc}", "见权重说明", "B", "✅"])
+        acc_txt = f"准确率 {float(acc):.4f}" if isinstance(acc, (int, float)) else f"准确率 {acc}"
+        table.append(["分类", model_name, params, acc_txt, "见权重说明", "B", "✅"])
 
 # -------- 2. 抄 C 的检测账本 --------
+# 单阶段两个网络都是失败基线（conf 分支学不出排序），验证集 mAP 约 0，如实标注。
 det_files = {
     "YOLOv3": "yolov3_train_summary.json",
     "PP-YOLOE-s": "ppyoloe_s_train_summary.json"
@@ -39,18 +41,30 @@ for model_name, filename in det_files.items():
             data = json.load(f)
         params = data.get("params_wan", "未知")
         map50 = data.get("best_val_map50", "未知")
-        table.append(["检测", model_name, params, f"mAP@0.5 {map50}", "—", "C", "❌ 失败"])
+        # 注意：这个值极小（如 1.65e-06），直接打印会变成科学计数法，格式化到 4 位更可读
+        map_txt = f"mAP@0.5 {float(map50):.4f}" if isinstance(map50, (int, float)) else f"mAP@0.5 {map50}"
+        table.append(["检测", model_name, params, map_txt, "—", "C", "❌ 失败"])
 
 # -------- 3. 抄 C 的融合方案账本 --------
-fuse_path = os.path.join(metrics_dir, "test_fuse_final.json")
-if not os.path.exists(fuse_path):
-    fuse_path = os.path.join(metrics_dir, "val_fuse.json")
-if os.path.exists(fuse_path):
-    with open(fuse_path, "r", encoding="utf-8") as f:
+# 取数优先级 = 「最新 + 最完整」：优化版（预训练主干 + GIoU + 128 输入）优于旧流水线。
+# 2026-09-16 更新：优化版测试集/验证集已产出，原先只读 test_fuse_final.json 会让
+# 汇总表停留在旧数字（0.1552），与实际交付不符。
+fuse_candidates = [
+    ("test_fuse_pre128.json", "滑窗+验证器/精修器融合（优化版）", "测试集"),
+    ("val_fuse_pre128.json", "滑窗+验证器/精修器融合（优化版）", "验证集"),
+    ("test_fuse_final.json", "滑窗+验证器/精修器融合（旧流水线）", "测试集"),
+]
+for filename, label, split in fuse_candidates:
+    path = os.path.join(metrics_dir, filename)
+    if not os.path.exists(path):
+        continue
+    with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    map50 = data.get("map50", "未知")
-    ms = data.get("ms_per_image", "未知")
-    table.append(["检测", "滑窗+验证器/精修器融合", "259万 ×2", f"mAP@0.5 {map50}", f"{ms} ms", "C", "⚠️ 部分达标"])
+    map50 = data.get("map50")
+    ms = data.get("ms_per_image")
+    map_txt = f"mAP@0.5 {float(map50):.4f}（{split}）" if isinstance(map50, (int, float)) else f"mAP@0.5 {map50}"
+    ms_txt = f"{float(ms):.0f} ms" if isinstance(ms, (int, float)) else f"{ms} ms"
+    table.append(["检测", label, "259万 ×2", map_txt, ms_txt, "C", "⚠️ 部分达标"])
 
 # -------- 4. 把表格写到 results 文件夹 --------
 with open(output_file, "w", encoding="utf-8-sig", newline="") as f:

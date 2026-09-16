@@ -32,10 +32,13 @@ for name, fn in cls_data.items():
         scores.append(d.get("best_val_acc", 0))
 
 # 2. 读 C 的检测账本
+# 2026-09-16 更新：融合方案原先读 val_fuse.json（0.1572，第二轮基础参数），
+# 与实际交付不符；现改为读优化版 val_fuse_pre128.json（0.2473），并保留旧流水线作对照。
 det_data = {
     "YOLOv3": ("yolov3_train_summary.json", "best_val_map50"),
     "PP-YOLOE-s": ("ppyoloe_s_train_summary.json", "best_val_map50"),
-    "融合方案": ("val_fuse.json", "map50")
+    "融合(旧流水线)": ("val_fuse_final.json", "map50"),
+    "融合(优化版)": ("val_fuse_pre128.json", "map50")
 }
 for name, (fn, key) in det_data.items():
     p = os.path.join(metrics_dir, fn)
@@ -47,9 +50,9 @@ for name, (fn, key) in det_data.items():
 
 # 3. 画图
 plt.figure(figsize=(10, 6))
-colors = ['#4C72B0', '#55A868', '#C44E52', '#8172B2', '#CCB974']
-plt.bar(models, scores, color=colors)
-plt.title("模型关键指标对比（分类准确率 / 检测 mAP）")
+colors = ['#4C72B0', '#55A868', '#C44E52', '#8172B2', '#CCB974', '#64B5CD']
+plt.bar(models, scores, color=colors[:len(models)])
+plt.title("模型关键指标对比（分类准确率 / 检测验证集 mAP@0.5）")
 plt.ylabel("分数")
 plt.ylim(0, 1.1)  # 分数最高是1.0，留点空间写数字
 

@@ -17,14 +17,14 @@
 
 ---
 
-## 当前进度（更新时间：2026-09-14）
+## 当前进度（更新时间：2026-09-16）
 
 | 成员 | 状态 | 说明 |
 |---|---|---|
 | A 数据 | ✅ **已完成** | 1800 张图 + 1800 个标注全齐，划分完成，23 项自检全过 |
 | B 分类 | ✅ **已完成** | 两个网络测试集准确率 **100%**，权重/图/报告齐全 |
-| C 检测 | ⚠️ **部分完成** | 单阶段网络 mAP≈0（失败），改用滑窗+双模型融合方案，测试集 **mAP@0.5 = 0.1552** |
-| D 工具链 | ✅ **已完成** | `src/tools/` 四个脚本仍为空；B/C 已预留接口 |
+| C 检测 | ⚠️ **部分完成** | 单阶段网络 mAP≈0（失败）；改用的滑窗+双模型融合方案已迭代两轮，**测试集 mAP@0.5 = 0.2176**（验证集 0.2473），仍未达常规检测及格线 |
+| D 工具链 | ⚠️ **部分完成** | `log2table.py` / `plot_summary.py` / `run_all.py` 已实装并实测可跑；`metrics.py` 仍是**接口骨架**（7 个指标函数为 `NotImplementedError`），B/C 目前各自实现指标 |
 
 ---
 
@@ -52,24 +52,29 @@
 
 失败原因（已排除"训练不充分""小目标难检"等解释）：框定位是准的（GT 特征点上框 IoU 0.742/0.757），
 但**置信度学不出来**——正样本每图仅 2~3 个，候选位置在 10⁴ 量级（占 0.3%），正确框的 obj 分数只有 0.056、排第 135 位，被 top_k 截断。
+**2026-09-16 又专门验证过一次**：把主干换成 ImageNet 预训练（resnet50）+ obj 分支加 Focal Loss 重训，验证集 mAP 仍只有 **0.0003**，
+最佳候选的 obj 分数中位数 0.0355、排名中位数 6667/10647 —— 说明这不是"主干不够强/缺 focal"，而是数据规模问题（1260 张训练图、每图 2~3 个正样本）。
 
 **改用的方案**：多尺度多长宽比滑窗 → 区域验证器（判类）+ 区域精修器（判类+框回归）→ 概率几何平均融合 → NMS
 
-| 划分 | mAP@0.5 | 精确率 | 召回率 | 每图框数 |
-|---|---|---|---|---|
-| 验证集 270 张 | 0.1681 | 0.0755 | 0.6307 | 19.8 |
-| **测试集 270 张** | **0.1552** | **0.0782** | **0.6483** | 19.5 |
+| 划分 | 旧流水线 mAP@0.5 | **优化版 mAP@0.5** | 精确率 | 召回率 | 每图框数 |
+|---|---|---|---|---|---|
+| 验证集 270 张 | 0.1681 | **0.2473** | 0.1529 | 0.6072 | 9.4 |
+| **测试集 270 张** | 0.1552 | **0.2176** | **0.1363** | **0.5521** | 9.5 |
 
-**每类 AP@0.5（测试集）**：PS 麻点 **0.353** ｜ Pa 斑块 0.201 ｜ Cr 龟裂 0.136 ｜ RS 0.112 ｜ Sc 划痕 0.070 ｜ In 夹杂 0.059
+> 优化版 = 判别模型主干换 ImageNet 预训练 + 输入 ImageNet 归一化 → 精修器框回归损失换 GIoU → 输入 96 提到 128，
+> 三步各自实测：+0.0358 / +0.0132 / +0.0302（验证集）。后处理沿用原参数（0.6/0.4/150/50），未在验证集上挑参。
 
-> 上表数字来自**一次完整流水线重跑**（`python src/det/tools/full_pipeline.py`，总耗时 186.2 分钟，12 个子任务 11 项通过）。
-> 相比最初版本，测试集 mAP@0.5 从 0.0548 提升到 **0.1552（+183%）**，验证集从 0.0677 到 0.1681（+148%）。
->
-> 区域验证器图块分类准确率（验证集）0.8816；单阶段检测器的框定位其实可用（IoU 0.74/0.757），
-> 但置信度排序学不出来（obj 分数最高只有 0.056）。
+**每类 AP@0.5（优化版，测试集）**：PS 麻点 **0.536** ｜ Cr 龟裂 0.219 ｜ Pa 斑块 0.159 ｜ RS 0.142 ｜ In 夹杂 0.134 ｜ Sc 划痕 0.117
 
-**⚠️ 如实说明**：召回率 0.65 尚可，但**精确率只有 0.078**（每图输出 19.5 个框，真值平均只有 2.4 个），
-导致 mAP@0.5 仅 0.155，**未达常规检测任务的及格线（0.5）**。任务2 属于**部分达标**，报告中请勿美化。
+> 旧流水线的测试集数字（0.1552，每类 PS 0.353 / Pa 0.201 / Cr 0.136 / RS 0.112 / Sc 0.070 / In 0.059）
+> 来自一次完整流水线重跑（`python src/det/tools/full_pipeline.py`，186.2 分钟，12 个子任务 11 项通过）。
+> 相比最初版本（测试集 0.0548），优化版累计提升 **+297%**。
+> 区域验证器图块分类准确率从 0.8816 提到 **0.9564**，精修器从 0.7795 提到 0.8384、精修后 IoU 从 0.4442 提到 0.4919。
+
+**⚠️ 如实说明**：召回率 0.55、精确率 0.136（每图输出 9.5 个框，真值平均 2.4 个），
+mAP@0.5 = 0.2176，**仍远低于常规检测任务的及格线（0.5）**。任务2 属于**部分达标**，报告中请勿美化。
+优化轮试过并否决的方向也一并记录（逐类阈值不叠加、步长 8 收益噪声级、单阶段换预训练主干无效、学习式重排序 0.2540→0.1949）。
 > 详见 `docs/C_检测任务工作总结.md`、`src/det/README_det.md`
 
 ### 对比汇总
@@ -77,7 +82,7 @@
 | 任务 | 网络数 | 最佳指标 | 达标情况 |
 |---|---|---|---|
 | 任务1 分类 | 2 | 准确率 1.0000 | ✅ 完全达标 |
-| 任务2 定位 | 2 + 2（附加） | mAP@0.5 0.1552 | ⚠️ 部分达标 |
+| 任务2 定位 | 2 + 2（附加） | 测试集 mAP@0.5 0.2176 | ⚠️ 部分达标 |
 
 ---
 
@@ -206,7 +211,7 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 ├── src/
 │   ├── data/    (6 个脚本)   ← A：数据下载、校验、划分、VOC 转换、EDA、自检
 │   ├── cls/     (10 个文件)  ← B：分类训练/评估/CAM/导出 + 公共模块
-│   ├── det/     (42 个文件)  ← C：检测训练/评估/可视化/两阶段方案 + core/nets/tools
+│   ├── det/     (45 个文件)  ← C：检测训练/评估/可视化/两阶段方案 + core/nets/tools
 │   └── tools/   (4 个空脚本) ← D：未完成
 ├── results/
 │   ├── metrics/   ← 40 份（A 5 + B 5 + C 30）
@@ -244,7 +249,7 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 | `train_curves.py` | 训练曲线对比图（附加） |
 | `README_B.md` | B 的使用说明 |
 
-### C · 检测（`src/det/`，42 个文件）⚠️
+### C · 检测（`src/det/`，45 个文件）⚠️
 
 **主脚本（9 个）**
 
@@ -264,23 +269,24 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 
 **`nets/`（5 个文件 = 4 个网络 + `__init__.py`）**：`darknet` + `yolov3`、`cspresnet` + `ppyoloe`
 
-**`tools/`（15 个）**：诊断与调优工具。`full_pipeline.py` 是一键复现入口，`summarize.py` 生成结果汇总，
-`check_docs.py` 校验文档与产物一致性，其余为迭代过程中的消融/调参/诊断脚本（C 保留作为工作量证据）。
+**`tools/`（21 个）**：诊断与调优工具。`full_pipeline.py` 是一键复现入口，`summarize.py` 生成结果汇总，
+`check_docs.py` 校验文档与产物一致性，`viz_fused.py` 出真值-预测对比图，其余为迭代过程中的消融/调参/诊断脚本（C 保留作为工作量证据）。
 
 > **运行方式注意**：C 的脚本都在开头 `sys.path.insert(0, 脚本所在目录)`，
 > 所以必须**从项目根目录用 `python src/det/xxx.py` 运行**，不能直接 `import src.det.xxx`。
 
-### D · 工具链（`src/tools/`）✅ 已完成
+### D · 工具链（`src/tools/`）⚠️ 部分完成
 
 | 文件 | 计划做什么 | 现状 |
 |---|---|---|
-| `metrics.py` | 公共指标库，B/C 直接 import | ✅ 已实现 |
-| `log2table.py` | 解析训练日志 → 结果表 | ✅ 已实现 |
-| `plot_summary.py` | 网络对比柱状图 | ✅ 已实现 |
-| `run_all.py` | 一键复现全流程 | ✅ 已实现 |
+| `metrics.py` | 公共指标库，B/C 直接 import | ⚠️ **接口骨架**：7 个指标函数只有签名，函数体是 `raise NotImplementedError`；仅 `load_json` / `save_json` 可用 |
+| `log2table.py` | 解析训练日志 → 结果表 | ✅ 已实现并实测通过（产出 `results/summary_table.csv`） |
+| `plot_summary.py` | 网络对比柱状图 | ✅ 已实现并实测通过（产出 `results/figures/summary_compare.png`） |
+| `run_all.py` | 一键复现全流程 | ✅ 已实现（数据自检 → 汇总表 → 对比图） |
 
 > B 和 C 都为这个接口预留了切换点：B 的 `_common.py`、C 的 `core/utils.py: evaluate_map()`
 > 都可以改成从 `tools.metrics` 导入，调用方一行不用改。
+> **但目前还不能切** —— `tools.metrics` 的指标函数尚未实现，切过去会直接抛 `NotImplementedError`。
 
 ## 六、四个网络的结果对比
 
@@ -290,7 +296,8 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 | 分类 | MobileNetV3-small | 154 万 | 准确率 1.0000 | B | ✅ |
 | 检测 | YOLOv3 | 6440 万 | mAP@0.5 **0.0000** | C | ❌ 失败 |
 | 检测 | PP-YOLOE-s | 2375 万 | mAP@0.5 **0.0000** | C | ❌ 失败 |
-| 检测 | 滑窗 + 验证器/精修器融合（自研） | 259 万 ×2 | mAP@0.5 **0.1552** | C | ⚠️ 部分达标 |
+| 检测 | 滑窗 + 验证器/精修器融合（自研，优化版） | 259 万 ×2 | mAP@0.5 **0.2176** | C | ⚠️ 部分达标 |
+| 检测 | 滑窗 + 验证器/精修器融合（旧流水线） | 259 万 ×2 | mAP@0.5 0.1552 | C | ⚠️ 部分达标 |
 
 ## 七、成员署名区
 
@@ -324,9 +331,21 @@ python src/cls/export.py --model resnet50_vd
 python src/cls/train_curves.py
 
 # ---------- C：检测 ----------
-# 最终方案评估（只需 verifier + refiner 两个权重，共 19.8MB）
+# 最终方案（优化版：预训练主干 + GIoU + 128 输入）——先训两个区域判别模型
+python src/det/train_verifier.py --name verifier_pre128 --pretrained --norm imagenet --in-size 128
+python src/det/train_refiner.py --name refiner_giou128 --pretrained --norm imagenet \
+    --in-size 128 --reg-loss giou --init-verifier results/weights/verifier_pre128_best.pdparams
+
+# 最终方案评估（--norm / --in-size 必须与训练一致）
 python src/det/eval_fused.py --split test --mode fuse \
     --stride 12 --score-th 0.6 --nms-iou 0.4 --top-k 150 --max-det 50 \
+    --norm imagenet --in-size 128 \
+    --verifier-weights results/weights/verifier_pre128_best.pdparams \
+    --refiner-weights  results/weights/refiner_giou128_best.pdparams \
+    --tag test_fuse_pre128
+
+# 旧流水线（随机初始化主干 + L2 + 96 输入）等价于 --norm none --in-size 96
+python src/det/eval_fused.py --split test --mode fuse \
     --verifier-weights results/weights/verifier_best.pdparams \
     --refiner-weights  results/weights/refiner_best.pdparams
 
@@ -335,7 +354,7 @@ python src/det/train.py --config src/det/configs/yolov3.yml
 python src/det/train.py --config src/det/configs/ppyoloe_s.yml
 python src/det/eval_det.py --model yolov3 --weights results/weights/yolov3_best.pdparams
 
-# 从数据自检到报告汇总一键复现（约 186 分钟，需 GPU）
+# 从数据自检到报告汇总一键复现（旧流水线，约 186 分钟，需 GPU）
 python src/det/tools/full_pipeline.py
 
 # ---------- D：工具链（未实现，脚本当前为空）----------
@@ -353,15 +372,18 @@ python src/det/tools/full_pipeline.py
 | `cls_resnet50_vd_best.pdparams` / `_last` | 94.3 MB ×2 | B：ResNet50 训练权重 |
 | `cls_mobilenet_v3_small_best.pdparams` / `_last` | 6.2 MB ×2 | B：MobileNetV3 训练权重 |
 | `cls_*_infer.json` + `_infer.pdiparams` | — | B：导出好的推理模型，部署直接用这两个 |
-| `verifier_best.pdparams` | 10.4 MB | **C：最终方案必需**（区域验证器） |
-| `refiner_best.pdparams` | 10.4 MB | **C：最终方案必需**（区域精修器） |
+| `verifier_best.pdparams` | 10.4 MB | C：旧流水线（随机主干 + 96 输入）验证器 |
+| `refiner_best.pdparams` | 10.4 MB | C：旧流水线精修器 |
+| `verifier_pre128_best.pdparams` | 10.4 MB | **C：优化版必需**（ImageNet 预训练主干 + 128 输入）验证器 |
+| `refiner_giou128_best.pdparams` | 10.4 MB | **C：优化版必需**（GIoU 回归 + 128 输入）精修器 |
+| `verifier_pre_best.pdparams` / `refiner_pre_best.pdparams` / `refiner_giou_best.pdparams` | 10.4 MB ×3 | C：优化轮中间版本（96 输入 / L2 对照），仅作 A/B 记录 |
 | `yolov3_best.pdparams` / `_last` | 257.6 MB ×2 | C：单阶段失败基线（保留作对照） |
 | `ppyoloe_s_best.pdparams` / `_last` | 95.1 MB ×2 | C：单阶段失败基线（保留作对照） |
 | `权重说明.txt` | — | B 的权重使用说明（含部署代码示例） |
 | `MANIFEST.txt` | — | C 的权重包说明（含复现命令） |
 
-> **想复现 C 的最终指标，只需要 `verifier_best` + `refiner_best`（19.8 MB）**，
-> 其余 673 MB 是单阶段失败实验的记录。
+> **想复现 C 的最终指标，只需要 `verifier_pre128_best` + `refiner_giou128_best`（19.8 MB）**；
+> 其余是单阶段失败实验与优化轮中间版本的记录。
 
 ## 十、四条铁律
 
@@ -381,10 +403,16 @@ python src/det/tools/full_pipeline.py
 
 ## 十二、已知问题与后续改进
 
-1. **任务2 未达标**（最需要解决）：精确率 0.078 过低。建议方向：
-   给置信度分支加 **Focal Loss / OHEM**；换**有预训练权重**的主干；在滑窗基础上加**框回归头**；
-   把 200×200 原图**重叠裁块**扩充训练样本。
-2. **D 的部分完全空缺**：`src/tools/` 四个脚本 0 字节，报告里"评测工具链"一节无内容可写。（已经写完）
-3. **C 的复现门槛高**：单阶段训练与融合评估均需 GPU（CPU 上耗时不可接受），
-   现有可视化图与指标已入库，无需重跑即可查证。
+1. **任务2 仍未达标**（最需要解决）：优化后测试集 mAP@0.5 = 0.2176、精确率 0.136，离 0.5 的及格线还远。
+   优化轮已经把「换预训练主干」这条建议做完（+0.0358），也**实测否决**了三条：
+   给单阶段检测器加 Focal Loss + 预训练主干（val 0.0003，obj 排名中位数 6667/10647，属数据规模问题）、
+   逐类分数阈值（增益不叠加，+0.0008~0.0013）、学习式重排序替代几何平均（0.2540 → 0.1949）。
+   **剩下还没做的**：把 200×200 原图做**重叠裁块**扩充训练样本；类别专属滑窗尺度集合；
+   若允许换技术栈，用 COCO 预训练的检测器微调（迁移强度远高于 ImageNet 分类特征）。
+2. **D 的工具链部分可用**：`log2table.py` / `plot_summary.py` / `run_all.py` 已实装并实测可跑，
+   但 `metrics.py` 的 7 个指标函数仍是 `NotImplementedError` 骨架 —— 报告里"评测工具链"一节只能写到"接口已定义"，
+   B/C 的指标目前各自实现（C 在 `src/det/core/utils.py`）。
+3. **C 的复现门槛高**：单阶段训练与融合评估均需 GPU（CPU 上耗时不可接受）；
+   优化版比旧流水线更慢（128 输入，测试集单图 4986 ms）。现有可视化图与指标已入库，无需重跑即可查证。
 4. **项目文档与产物的一致性**：C 提供了 `src/det/tools/check_docs.py` 可自动校验，改动数字后建议跑一次。
+5. **测试集使用次数**：第一轮交付与优化轮各评估过一次（共两次），后续再动测试集需要团队确认。
