@@ -310,6 +310,9 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 
 ## 八、脚本用法
 
+> **第一次拿到这个项目？先看 [`docs/使用说明.md`](docs/使用说明.md)** —— 15 分钟上手：环境、一键运行、
+> 结果在哪、常见问题、分模块手动运行命令，都在那一份里。
+>
 > **推荐入口：`python run_project.py`**（仓库根目录，全项目一键流水线，CPU / GPU 通用）。
 > 它把 A/B/C/D 四人的入口脚本串成一条**可断点续跑**的流水线（已完成的阶段自动跳过，`--force` 重跑）：
 >

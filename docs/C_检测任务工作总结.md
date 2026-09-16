@@ -111,6 +111,7 @@ generate_proposals      distribute_fpn_proposals      psroi_pool
 
 ### 3.3 文档
 
+- [`docs/使用说明.md`](使用说明.md)：全项目**快速上手**（环境、一键运行、结果在哪、FAQ、分模块命令）
 - `src/det/README_det.md`（403 行）：设计思路、使用方法、环境、评测口径、**踩坑记录**、优化轮实现要点
 - `results/metrics/det_summary.md`：结果总表（由 `tools/summarize.py` 自动生成）
 - 本文件：工作总结
