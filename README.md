@@ -310,6 +310,24 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 
 ## 八、脚本用法
 
+> **推荐入口：`python run_project.py`**（仓库根目录，全项目一键流水线，CPU / GPU 通用）。
+> 它把 A/B/C/D 四人的入口脚本串成一条**可断点续跑**的流水线（已完成的阶段自动跳过，`--force` 重跑）：
+>
+> | 命令 | 做什么 | 耗时 |
+> |---|---|---|
+> | `python run_project.py --profile eval` | 只跑自检 + 汇总 + 校验，**不训练** | 约 5 秒（不需 GPU） |
+> | `python run_project.py --profile standard` | 训练最终检测方案（验证器+精修器）并评估验证集与测试集 | GPU 约 1 小时 |
+> | `python run_project.py --profile full` | 再加单阶段 YOLOv3 / PP-YOLOE-s 基线 | GPU 约 3 小时 |
+> | `python run_project.py --quick` | 冒烟：每步都跑但极小规模（1 epoch / 20 张图） | 约 5 分钟 |
+> | `python run_project.py --dry-run` | 只打印将执行的命令，零写入 | 秒级 |
+> | `python run_project.py --device cpu` | 强制 CPU，自动降级为 96 输入 / 小 epoch | — |
+>
+> 其他参数：`--list` 列阶段、`--only a,b` / `--skip a,b` 选阶段、`--in-size` / `--epochs-scale` 调规模、
+> `--no-pretrained` 复现旧流水线口径。运行记录写 `results/metrics/run_project_summary.json`，
+> 每阶段日志在 `results/logs/run_project/`。
+
+下面是**逐条命令**的原始用法（想单独跑某一步时看这里）：
+
 ```bash
 conda activate paddle_env      # 环境名是 paddle_env，不是 env.paddle
 
