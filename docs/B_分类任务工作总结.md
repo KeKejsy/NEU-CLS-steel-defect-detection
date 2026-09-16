@@ -152,8 +152,9 @@ python src/cls/train_curves.py
 1. 精度已到顶（100%），无法再区分两个网络，因此对比重点放在参数量 / FPS / 收敛速度上。
 2. 未做数据增强的消融实验；若老师要求"调参分析"，可补一组"无增强 vs 有增强"的对照（脚本已支持改配置）。
 3. 未使用 GPU；若后续装了 GPU 版飞桨，`train.py` 无需改动即可加速。
-4. 目前 `src/tools/metrics.py`（D 负责）仍为空文件，指标由 `src/cls/_common.py` 本地实现计算；
-   接口已预留，D 补齐后 `eval_cls.py` 会自动调用并把结果写入 `tools_metrics` 字段。
+4. 指标口径已由 D 的 `src/tools/metrics.py` 统一：`eval_cls.py` 现在会自动调用它并把结果写入
+   `tools_metrics` 字段做交叉核对；主口径仍是 `src/cls/_common.py` 的本地实现，两者数值已验证一致
+   （`_common.external_cls_metrics()` 已能命中 `src/tools/metrics.py::classification_metrics`）。
 
 ## 九、产出的全部文件
 

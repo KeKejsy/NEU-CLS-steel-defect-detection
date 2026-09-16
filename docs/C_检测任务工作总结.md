@@ -641,7 +641,7 @@ python src/det/train.py --config src/det/configs/yolov3.yml --epochs 3 --batch-s
 | 模型权重未纳入版本库 | ℹ️ 正常 | `results/weights/` 被 `.gitignore` 排除（约 693MB），需重新训练或单独传输 |
 | 训练中间快照占空间 | ℹ️ 已处理 | `save_every: 20` 会生成 5~6 个快照/网络。交付前已清理，仅保留 `best` 与 `last` |
 | `src/det/__init__.py` 为空 | ℹ️ 正常 | 脚本以 `sys.path` 注入方式导入 `core`/`nets`，不需要包级导出 |
-| mAP 实现暂在 `core/utils.py` | ℹ️ 待替换 | 成员 D 的 `src/tools/metrics.py` 尚未交付。接口已按可替换设计：只通过 `utils.evaluate_map()` 调用，将来替换内部实现即可，调用方一行不用改 |
+| mAP 实现暂在 `core/utils.py` | ℹ️ 可切换 | D 的 `src/tools/metrics.py` 已交付 `evaluate_map()`，且已用本任务产物反向验证口径一致（六类 AP 与 mAP@0.5 逐位相同）。目前仍走 `utils.evaluate_map()`，需要统一出口时把它的内部实现换成 `from tools.metrics import evaluate_map` 即可，调用方一行不用改 |
 
 ---
 

@@ -24,7 +24,7 @@
 | A 数据 | ✅ **已完成** | 1800 张图 + 1800 个标注全齐，划分完成，23 项自检全过 |
 | B 分类 | ✅ **已完成** | 两个网络测试集准确率 **100%**，权重/图/报告齐全 |
 | C 检测 | ⚠️ **部分完成** | 单阶段网络 mAP≈0（失败）；改用的滑窗+双模型融合方案已迭代两轮，**测试集 mAP@0.5 = 0.2176**（验证集 0.2473），仍未达常规检测及格线 |
-| D 工具链 | ⚠️ **部分完成** | `log2table.py` / `plot_summary.py` / `run_all.py` 已实装并实测可跑；`metrics.py` 仍是**接口骨架**（7 个指标函数为 `NotImplementedError`），B/C 目前各自实现指标 |
+| D 工具链 | ✅ **已完成** | 4 个脚本全部实装并实测可跑：`metrics.py` 公共指标库（7 个指标函数，分类/检测两套口径已与 B、C 对齐）、`log2table.py` 日志转表、`plot_summary.py` 对比图、`run_all.py` 一键复现 |
 
 ---
 
@@ -211,11 +211,11 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 ├── src/
 │   ├── data/    (6 个脚本)   ← A：数据下载、校验、划分、VOC 转换、EDA、自检
 │   ├── cls/     (10 个文件)  ← B：分类训练/评估/CAM/导出 + 公共模块
-│   ├── det/     (45 个文件)  ← C：检测训练/评估/可视化/两阶段方案 + core/nets/tools
-│   └── tools/   (4 个空脚本) ← D：未完成
+│   ├── det/     (49 个文件)  ← C：检测训练/评估/可视化/两阶段方案 + core/nets/tools
+│   └── tools/   (4 个脚本)   ← D：公共指标库、日志转表、对比图、一键复现
 ├── results/
-│   ├── metrics/   ← 40 份（A 5 + B 5 + C 30）
-│   ├── figures/   ← 50 张（A 4 + B 5 + C 41）
+│   ├── metrics/   ← 55 份（数据自检报告、分类评估、检测评估、汇总表）
+│   ├── figures/   ← 61 张（数据分布图、分类混淆矩阵/CAM、检测 PR/AP/样例图）
 │   ├── logs/      ← 7 份（B 的训练日志、超参记录与测试集使用记录）
 │   └── weights/   ← 16 个权重文件（981 MB，不进 git）
 └── docs/
@@ -275,18 +275,26 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 > **运行方式注意**：C 的脚本都在开头 `sys.path.insert(0, 脚本所在目录)`，
 > 所以必须**从项目根目录用 `python src/det/xxx.py` 运行**，不能直接 `import src.det.xxx`。
 
-### D · 工具链（`src/tools/`）⚠️ 部分完成
+### D · 工具链（`src/tools/`）✅ 已完成
 
 | 文件 | 计划做什么 | 现状 |
 |---|---|---|
-| `metrics.py` | 公共指标库，B/C 直接 import | ⚠️ **接口骨架**：7 个指标函数只有签名，函数体是 `raise NotImplementedError`；仅 `load_json` / `save_json` 可用 |
+| `metrics.py` | 公共指标库，B/C 直接 import | ✅ 已实现：`accuracy` / `precision_recall_f1` / `confusion_matrix` / `compute_ap` / `compute_map` / `pr_curve` / `count_params` 全部落地，另提供 `evaluate_map` 以及 B 探测用的 `classification_metrics` 等别名 |
 | `log2table.py` | 解析训练日志 → 结果表 | ✅ 已实现并实测通过（产出 `results/summary_table.csv`） |
 | `plot_summary.py` | 网络对比柱状图 | ✅ 已实现并实测通过（产出 `results/figures/summary_compare.png`） |
 | `run_all.py` | 一键复现全流程 | ✅ 已实现（数据自检 → 汇总表 → 对比图） |
 
-> B 和 C 都为这个接口预留了切换点：B 的 `_common.py`、C 的 `core/utils.py: evaluate_map()`
-> 都可以改成从 `tools.metrics` 导入，调用方一行不用改。
-> **但目前还不能切** —— `tools.metrics` 的指标函数尚未实现，切过去会直接抛 `NotImplementedError`。
+> **口径已经统一**：`metrics.py` 的分类口径与 B 的 `_common.py:metrics_from_cm` 一致，
+> 检测口径与 C 的 `core/utils.py:evaluate_map` 一致（逐类按分数全局排序匹配 GT，用 VOC 2010+ 的 101 点插值法求 AP）。
+> 已用 B/C 入库的产物反向验证：`compute_ap` 能**逐位复现** C 记录的六类 AP 与 mAP@0.5（偏差 0），
+> 分类指标与 B 记录的 `accuracy` / `macro` / `num_samples` 也完全一致。
+>
+> 接入方式：
+> - **B**：`_common.py` 的 `external_cls_metrics()` 会按名字探测，现已命中
+>   `src/tools/metrics.py::classification_metrics`，结果额外记入 `tools_metrics` 字段做交叉核对
+>   （主口径仍是 B 自己的实现，已有结果不会变）。
+> - **C**：把 `core/utils.py` 里 `evaluate_map` 的内部实现换成 `from tools.metrics import evaluate_map`
+>   即可，入参顺序与返回结构完全一致（本模块额外多返回一个 `overall` 字段）。
 
 ## 六、四个网络的结果对比
 
@@ -306,7 +314,7 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 | A | | 数据负责人 | `src/data/`、`dataset/` |
 | B | | 分类模型负责人 | `src/cls/` |
 | C | | 检测模型负责人 | `src/det/` |
-| D | | 评测工具链负责人 | `src/tools/`（未完成） |
+| D | | 评测工具链负责人 | `src/tools/` |
 
 ## 八、脚本用法
 
@@ -378,10 +386,10 @@ python src/det/eval_det.py --model yolov3 --weights results/weights/yolov3_best.
 # 从数据自检到报告汇总一键复现（旧流水线，约 186 分钟，需 GPU）
 python src/det/tools/full_pipeline.py
 
-# ---------- D：工具链（未实现，脚本当前为空）----------
-# python src/tools/log2table.py
-# python src/tools/plot_summary.py
-# python src/tools/run_all.py
+# ---------- D：工具链（4 个脚本全部可用）----------
+python src/tools/run_all.py        # 一键：数据自检 → 汇总表 → 对比图
+python src/tools/log2table.py      # 只生成 results/summary_table.csv
+python src/tools/plot_summary.py   # 只生成 results/figures/summary_compare.png
 ```
 
 ## 九、权重文件（`results/weights/`，共 981 MB）
@@ -411,7 +419,7 @@ python src/det/tools/full_pipeline.py
 1. **测试集只许最后用一次**，调参一律用验证集。`check_submit.py` 会检查 train/test 有没有混。
 2. **随机种子统一 2026**，写进脚本；配置里一律用相对路径；**项目路径必须纯英文无空格**。
 3. **只在自己的目录改文件**；要改 `src/tools/` 或别人的目录，先在群里说。
-4. **D 的 `metrics.py` 先给函数签名**（返回假值的空壳也行），B/C 才能照着写评估脚本。（未落实）
+4. **D 的 `metrics.py` 先给函数签名**（返回假值的空壳也行），B/C 才能照着写评估脚本。（已落实，函数体也已补齐）
 
 ## 十一、训练实操建议
 
@@ -430,9 +438,10 @@ python src/det/tools/full_pipeline.py
    逐类分数阈值（增益不叠加，+0.0008~0.0013）、学习式重排序替代几何平均（0.2540 → 0.1949）。
    **剩下还没做的**：把 200×200 原图做**重叠裁块**扩充训练样本；类别专属滑窗尺度集合；
    若允许换技术栈，用 COCO 预训练的检测器微调（迁移强度远高于 ImageNet 分类特征）。
-2. **D 的工具链部分可用**：`log2table.py` / `plot_summary.py` / `run_all.py` 已实装并实测可跑，
-   但 `metrics.py` 的 7 个指标函数仍是 `NotImplementedError` 骨架 —— 报告里"评测工具链"一节只能写到"接口已定义"，
-   B/C 的指标目前各自实现（C 在 `src/det/core/utils.py`）。
+2. **D 的工具链已全部落地**：4 个脚本均实装并实测可跑，`metrics.py` 的分类 / 检测两套口径
+   已分别与 B（`src/cls/_common.py`）、C（`src/det/core/utils.py`）对齐，并用两边已入库的产物反向验证一致。
+   目前是「本地实现为主 + D 的模块做交叉核对」的双轨状态；若要真正切成单一出口，
+   把 B 的 `evaluate_metrics()` 主口径与 C 的 `evaluate_map()` 内部行替换即可，两边都只需改一行。
 3. **C 的复现门槛高**：单阶段训练与融合评估均需 GPU（CPU 上耗时不可接受）；
    优化版比旧流水线更慢（128 输入，测试集单图 4986 ms）。现有可视化图与指标已入库，无需重跑即可查证。
 4. **项目文档与产物的一致性**：C 提供了 `src/det/tools/check_docs.py` 可自动校验，改动数字后建议跑一次。
