@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-17 09:14:40",
+  "time": "2026-09-17 09:16:48",
   "profile": "eval",
   "device": "gpu",
   "device_reason": "CUDA 可用（paddle 3.2.0）",
@@ -9,35 +9,35 @@
   "quick": false,
   "verifier_epochs": 30,
   "refiner_epochs": 40,
-  "total_sec": 0.0,
+  "total_sec": 4.1,
   "stages": [
     {
       "id": "data",
       "title": "A · 数据自检（23 项）",
-      "status": "skipped(done)",
-      "sec": 0,
-      "extra": "上次 2026-09-17 09:14:32"
+      "status": "ok",
+      "sec": 0.14215660095214844,
+      "extra": ""
     },
     {
       "id": "tools",
       "title": "D · 工具链（汇总表 + 对比图）",
-      "status": "skipped(done)",
-      "sec": 0,
-      "extra": "上次 2026-09-17 09:14:33"
+      "status": "ok",
+      "sec": 0.7704870700836182,
+      "extra": ""
     },
     {
       "id": "summarize",
       "title": "汇总：生成 det_summary.md/json",
-      "status": "skipped(done)",
-      "sec": 0,
-      "extra": "上次 2026-09-17 09:14:34"
+      "status": "ok",
+      "sec": 1.5672047138214111,
+      "extra": ""
     },
     {
       "id": "verify",
       "title": "校验：文档与产物一致性",
-      "status": "skipped(done)",
-      "sec": 0,
-      "extra": "上次 2026-09-17 09:14:36"
+      "status": "ok",
+      "sec": 1.5707695484161377,
+      "extra": ""
     }
   ],
   "python": "C:\\Users\\htt22\\miniconda3\\envs\\paddle_env\\python.exe",
