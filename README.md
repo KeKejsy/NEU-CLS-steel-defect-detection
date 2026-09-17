@@ -334,8 +334,11 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 > | `python run_project.py --device cpu` | 强制 CPU，自动降级为 96 输入 / 小 epoch | — |
 >
 > 其他参数：`--list` 列阶段、`--only a,b` / `--skip a,b` 选阶段、`--in-size` / `--epochs-scale` 调规模、
-> `--no-pretrained` 复现旧流水线口径。运行记录写 `results/metrics/run_project_summary.json`，
-> 每阶段日志在 `results/logs/run_project/`。
+> `--no-pretrained` 复现旧流水线口径、`--python <解释器>` 指定解释器。运行记录写
+> `results/metrics/run_project_summary.json`，每阶段日志在 `results/logs/run_project/`。
+>
+> **不用先 activate 环境**：脚本会自检当前解释器有没有 paddle，没有就自动找到装了 paddle 的
+> 解释器（本项目为 `miniconda3\envs\paddle_env\python.exe`）并用它重新运行；加 `--no-auto-python` 可关闭该行为。
 
 下面是**逐条命令**的原始用法（想单独跑某一步时看这里）：
 

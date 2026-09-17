@@ -70,6 +70,92 @@ BASE = Path(__file__).resolve().parent          # 仓库根目录（本脚本放
 PY = sys.executable                              # 复用同一个解释器（保证能 import paddle）
 RUN_DIR = BASE / "results" / "logs" / "run_project"
 
+# 解释器探测结果缓存（探测一次要几秒）
+_PADDLE_CACHE: dict[str, str | None] = {}
+
+
+# --------------------------------------------------------------------------- #
+# 解释器探测：确保用的是装了 paddle 的那个 python
+# --------------------------------------------------------------------------- #
+def _paddle_in(py: str, timeout: int = 180):
+    """某个解释器能否 import paddle；能就返回 "版本|paddle 版本"，否则 None
+
+    结果按解释器路径缓存（探测一次要几秒，避免重复开销）。
+    """
+    if py in _PADDLE_CACHE:
+        return _PADDLE_CACHE[py]
+    info = None
+    try:
+        r = subprocess.run([py, "-c", "import paddle,sys;"
+                            "print(sys.version.split()[0] + '|' + paddle.__version__)"],
+                           capture_output=True, text=True, timeout=timeout,
+                           encoding="utf-8", errors="ignore")
+        if r.returncode == 0 and "|" in (r.stdout or ""):
+            info = r.stdout.strip()
+    except Exception:                                     # noqa: BLE001
+        info = None
+    _PADDLE_CACHE[py] = info
+    if os.environ.get("RUN_PROJECT_DEBUG"):
+        print(f"   (探测 {py} -> {info})")
+    return info
+
+
+def candidate_pythons() -> list[str]:
+    """列出机器上值得一试的解释器（去重，保持优先级）
+
+    优先 conda 环境：本项目就是在 paddle_env 里跑出来的；其次是 PATH 上的 python。
+    """
+    import glob
+    import shutil as _sh
+    home = Path.home()
+    out = [sys.executable]
+    if os.environ.get("CONDA_PREFIX"):
+        out.append(str(Path(os.environ["CONDA_PREFIX"]) / "python.exe"))
+    for root in (home / "miniconda3", home / "anaconda3", home / "miniforge3",
+                 Path("C:/ProgramData/miniconda3"), Path("C:/ProgramData/anaconda3")):
+        out.append(str(root / "python.exe"))
+        for env_py in sorted(glob.glob(str(root / "envs" / "*" / "python.exe"))):
+            out.append(env_py)
+    for name in ("python3", "py"):
+        w = _sh.which(name)
+        if w:
+            out.append(w)
+    seen, uniq = set(), []
+    for p in out:
+        key = p.lower()
+        if key not in seen and Path(p).exists():
+            seen.add(key)
+            uniq.append(p)
+    return uniq
+
+
+def switch_to_paddle_python(force: str | None) -> str | None:
+    """找一个能 import paddle 的解释器并返回；当前解释器就可用时返回 None
+
+    返回值不为空表示"需要用它重新运行本脚本"。
+    """
+    if _paddle_in(sys.executable) is not None:
+        return None                                        # 当前就可用，什么都不用做
+    if force:
+        if _paddle_in(force) is None:
+            print(f"✘ --python 指定的解释器不可用（import paddle 失败）：{force}")
+            return "FAIL"
+        return force
+    if os.environ.get("RUN_PROJECT_NO_AUTO") == "1":
+        return None
+    print("⚠️ 当前解释器没有 paddle，正在查找机器上可用的解释器…")
+    for py in candidate_pythons():
+        if Path(py) == Path(sys.executable):
+            continue
+        info = _paddle_in(py)
+        if info:
+            ver, pad = info.split("|", 1)
+            print(f"   ✔ 找到：{py}")
+            print(f"     Python {ver} / paddle {pad}")
+            return py
+        print(f"   ✘ {py}")
+    return None
+
 # --------------------------------------------------------------------------- #
 # 阶段定义
 # --------------------------------------------------------------------------- #
@@ -347,6 +433,9 @@ def preflight(ctx) -> bool:
     if miss or n_img == 0:
         print("  ✘ 数据不完整：请先让 A 跑数据脚本，或确认 dataset/ 已就位")
         ok = False
+    if " " in str(BASE):
+        print("\n[提示] 项目路径里有空格：项目铁律要求纯英文无空格的路径。"
+              "\n       目前实测能跑通，但遇到古怪报错时可以先怀疑这一点。")
     free_gb = shutil.disk_usage(str(BASE)).free / 1024 ** 3
     print(f"  磁盘剩余    : {free_gb:.1f} GB")
     if free_gb < 3:
@@ -406,6 +495,10 @@ def main():
     ap.add_argument("--keep-going", action="store_true", help="某个阶段失败也继续后面的")
     ap.add_argument("--dry-run", action="store_true", help="只打印将执行的命令，不真正运行")
     ap.add_argument("--list", action="store_true", help="列出所有阶段后退出")
+    ap.add_argument("--python", default=None,
+                    help="用指定的解释器运行（默认自动选：优先找装了 paddle 的那个）")
+    ap.add_argument("--no-auto-python", action="store_true",
+                    help="不要自动切换解释器（当前 python 没有 paddle 时直接停下并给出提示）")
     args = ap.parse_args()
 
     if args.list:
@@ -415,6 +508,31 @@ def main():
             print(f"{s['id']:<16}{'/'.join(sorted(s['profiles'])):<22}{s['title']}")
         print("\n提示：--only / --skip 用上面的 id，逗号分隔")
         return 0
+
+    # 解释器自检：没激活 conda 环境时，直接 `python run_project.py` 会是系统 Python（无 paddle）。
+    # 这里自动找到装了 paddle 的解释器并用它**重新运行本脚本**，整个流程（含训练/评估子进程）
+    # 都会用同一个解释器，避免"到处找不到 paddle"。
+    if args.list is False:
+        pick = None if args.no_auto_python else switch_to_paddle_python(args.python)
+        if pick == "FAIL":
+            print("请用正确的解释器运行，例如：")
+            print(f'  "{Path.home() / "miniconda3/envs/paddle_env/python.exe"}" run_project.py')
+            return 2
+        if pick:
+            cmd = [pick, str(BASE / "run_project.py"), *sys.argv[1:], "--no-auto-python"]
+            print(f"   ↻ 改用该解释器重新运行：{Path(pick).name} run_project.py "
+                  f"{' '.join(sys.argv[1:])}\n")
+            env = dict(os.environ, RUN_PROJECT_NO_AUTO="1", PYTHONIOENCODING="utf-8")
+            return subprocess.run(cmd, cwd=str(BASE), env=env).returncode
+        if _paddle_in(sys.executable) is None:
+            if args.no_auto_python:
+                print("\n✘ 当前解释器没有 paddle（已按 --no-auto-python 跳过自动查找）。请：")
+            else:
+                print("\n✘ 当前解释器没有 paddle，机器上也没找到装有 paddle 的解释器。请：")
+            print("    conda activate paddle_env            # 激活本项目使用的环境")
+            print(f'    "{Path.home() / "miniconda3/envs/paddle_env/python.exe"}" run_project.py   # 或直接用该解释器')
+            print("  （环境已装好但不在常见位置时，用 --python <解释器路径> 手动指定）")
+            return 2
 
     device, reason = detect_device(args.device)
     if args.quick:
