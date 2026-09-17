@@ -211,11 +211,11 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 ├── src/
 │   ├── data/    (6 个脚本)   ← A：数据下载、校验、划分、VOC 转换、EDA、自检
 │   ├── cls/     (10 个文件)  ← B：分类训练/评估/CAM/导出 + 公共模块
-│   ├── det/     (49 个文件)  ← C：检测训练/评估/可视化/两阶段方案 + core/nets/tools
+│   ├── det/     (46 个文件)  ← C：检测训练/评估/可视化/两阶段方案 + core/nets/tools
 │   └── tools/   (4 个脚本)   ← D：公共指标库、日志转表、对比图、一键复现
 ├── results/
 │   ├── metrics/   ← 55 份（数据自检报告、分类评估、检测评估、汇总表）
-│   ├── figures/   ← 61 张（数据分布图、分类混淆矩阵/CAM、检测 PR/AP/样例图）
+│   ├── figures/   ← 62 张（数据分布图、分类混淆矩阵/CAM、检测 PR/AP/样例图）
 │   ├── logs/      ← 7 份（B 的训练日志、超参记录与测试集使用记录）
 │   └── weights/   ← 16 个权重文件（981 MB，不进 git）
 └── docs/
@@ -249,7 +249,7 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 | `train_curves.py` | 训练曲线对比图（附加） |
 | `README_B.md` | B 的使用说明 |
 
-### C · 检测（`src/det/`，45 个文件）⚠️
+### C · 检测（`src/det/`，46 个文件）⚠️
 
 **主脚本（9 个）**
 
