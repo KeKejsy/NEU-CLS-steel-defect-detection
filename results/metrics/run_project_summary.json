@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-16 16:34:20",
+  "time": "2026-09-17 09:09:44",
   "profile": "eval",
   "device": "gpu",
   "device_reason": "CUDA 可用（paddle 3.2.0）",
