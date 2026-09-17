@@ -33,10 +33,13 @@
   `full` 档的单阶段训练在 CPU 上会被跳过（实测 CPU 上不可用，见 README）。
 - `--device gpu`：强制 GPU，最终交付口径（预训练主干 + GIoU + **128 输入**）。
 
-## 断点续跑
+## 重跑策略
 
-每个阶段成功后写 `results/logs/run_project/<阶段>.done`；重跑时自动跳过已完成的阶段。
-加 `--force` 重跑全部，`--only a,b` 只跑指定阶段，`--skip b` 跳过若干阶段。
+**默认是重跑**：每个阶段都会执行，看到上次的 `.done` 标记只会提示一句、继续跑
+（这样"跑完什么也没做"的误会就不会再出现）。
+想利用断点续跑、跳过已完成的阶段，加 `--resume`。
+`--retrain` 会在权重已存在时也重新训练（默认复用已有权重，避免白跑几小时）；
+`--only a,b` / `--skip b` 用来挑选阶段。
 
 ## 常用命令
 
@@ -491,7 +494,12 @@ def main():
                     help="不用 ImageNet 预训练主干（复现旧流水线口径时用；首次需联网下载则必须不用）")
     ap.add_argument("--only", default=None, help="只跑这些阶段，逗号分隔（见 --list）")
     ap.add_argument("--skip", default=None, help="跳过这些阶段，逗号分隔")
-    ap.add_argument("--force", action="store_true", help="忽略 .done 标记，全部重跑")
+    ap.add_argument("--resume", action="store_true",
+                    help="跳过已完成的阶段（默认是**重跑**：即使上次跑过也再跑一遍）")
+    ap.add_argument("--retrain", action="store_true",
+                    help="即使权重已存在也重新训练（默认复用已有权重，避免白跑几小时）")
+    ap.add_argument("--force", action="store_true",
+                    help="等价于 --retrain（保留兼容：现在的默认行为已经是重跑）")
     ap.add_argument("--keep-going", action="store_true", help="某个阶段失败也继续后面的")
     ap.add_argument("--dry-run", action="store_true", help="只打印将执行的命令，不真正运行")
     ap.add_argument("--list", action="store_true", help="列出所有阶段后退出")
@@ -554,7 +562,8 @@ def main():
     pretrained = not args.no_pretrained
 
     ctx = dict(
-        device=device, device_reason=reason, quick=args.quick, force=args.force,
+        device=device, device_reason=reason, quick=args.quick,
+        resume=args.resume, retrain=(args.retrain or args.force),
         in_size=in_size, norm=norm, pretrained=pretrained,
         v_epochs=v_epochs, r_epochs=r_epochs,
         batch=16 if args.quick else (64 if device == "gpu" else 32),
@@ -603,6 +612,8 @@ def main():
           f"  训练 epoch=验证器 {v_epochs} / 精修器 {r_epochs}"
           + ("  （quick 冒烟）" if args.quick else ""))
     print(f"       共 {len(todo)} 个阶段：{', '.join(s['id'] for s in todo)}")
+    print(f"       重跑策略：{'跳过已完成（--resume）' if args.resume else '默认重跑全部阶段'}"
+          f"{'；即使权重已存在也重训（--retrain）' if ctx['retrain'] else '；训练阶段若权重已存在则复用'}")
     if device == "cpu" and args.profile != "eval":
         print("       ⚠️ CPU 训练很慢（实测 CPU 上单阶段训练不可用）；已自动降级为 96 输入 / 小 epoch。")
 
@@ -625,16 +636,18 @@ def main():
         sid = s["id"]
         done = stage_done_path(sid)
         print(f"\n{'─' * 84}\n▸ [{sid}] {s['title']}   预计 {s['eta']}")
-        if done.exists() and not args.force:
+        if done.exists():
             info = json.loads(done.read_text(encoding="utf-8"))
-            print(f"  ⏭ 已完成，跳过（{info.get('sec', 0):.0f}s，{info['time']}）；--force 可重跑")
-            results.append({**{k: s[k] for k in ("id", "title")},
-                            "status": "skipped(done)", "sec": 0,
-                            "extra": f"上次 {info['time']}"})
-            continue
+            if args.resume:
+                print(f"  ⏭ 已完成，按 --resume 跳过（{info.get('sec', 0):.0f}s，{info['time']}）")
+                results.append({**{k: s[k] for k in ("id", "title")},
+                                "status": "skipped(done)", "sec": 0,
+                                "extra": f"上次 {info['time']}"})
+                continue
+            print(f"  ↻ 上次已完成于 {info['time']}，默认重跑（要跳过加 --resume）")
         if s["skip"]:
             reason = s["skip"](ctx)
-            if reason and not args.force:
+            if reason and not ctx["retrain"]:
                 print(f"  ⏭ 跳过：{reason}")
                 results.append({**{k: s[k] for k in ("id", "title")},
                                 "status": "skipped(reason)", "sec": 0, "extra": reason})

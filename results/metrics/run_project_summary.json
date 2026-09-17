@@ -1,5 +1,5 @@
 {
-  "time": "2026-09-17 09:09:44",
+  "time": "2026-09-17 09:14:40",
   "profile": "eval",
   "device": "gpu",
   "device_reason": "CUDA 可用（paddle 3.2.0）",
@@ -16,28 +16,28 @@
       "title": "A · 数据自检（23 项）",
       "status": "skipped(done)",
       "sec": 0,
-      "extra": "上次 2026-09-16 15:52:35"
+      "extra": "上次 2026-09-17 09:14:32"
     },
     {
       "id": "tools",
       "title": "D · 工具链（汇总表 + 对比图）",
       "status": "skipped(done)",
       "sec": 0,
-      "extra": "上次 2026-09-16 15:52:36"
+      "extra": "上次 2026-09-17 09:14:33"
     },
     {
       "id": "summarize",
       "title": "汇总：生成 det_summary.md/json",
       "status": "skipped(done)",
       "sec": 0,
-      "extra": "上次 2026-09-16 15:52:38"
+      "extra": "上次 2026-09-17 09:14:34"
     },
     {
       "id": "verify",
       "title": "校验：文档与产物一致性",
       "status": "skipped(done)",
       "sec": 0,
-      "extra": "上次 2026-09-16 15:52:40"
+      "extra": "上次 2026-09-17 09:14:36"
     }
   ],
   "python": "C:\\Users\\htt22\\miniconda3\\envs\\paddle_env\\python.exe",

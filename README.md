@@ -322,7 +322,7 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 > 结果在哪、常见问题、分模块手动运行命令，都在那一份里。
 >
 > **推荐入口：`python run_project.py`**（仓库根目录，全项目一键流水线，CPU / GPU 通用）。
-> 它把 A/B/C/D 四人的入口脚本串成一条**可断点续跑**的流水线（已完成的阶段自动跳过，`--force` 重跑）：
+> 它把 A/B/C/D 四人的入口脚本串成一条流水线，**默认重跑每个阶段**（想跳过已完成的加 `--resume`）：
 >
 > | 命令 | 做什么 | 耗时 |
 > |---|---|---|
@@ -333,7 +333,8 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 > | `python run_project.py --dry-run` | 只打印将执行的命令，零写入 | 秒级 |
 > | `python run_project.py --device cpu` | 强制 CPU，自动降级为 96 输入 / 小 epoch | — |
 >
-> 其他参数：`--list` 列阶段、`--only a,b` / `--skip a,b` 选阶段、`--in-size` / `--epochs-scale` 调规模、
+> 其他参数：`--resume` 跳过已完成阶段（默认重跑）、`--retrain` / `--force` 强制重训、
+> `--list` 列阶段、`--only a,b` / `--skip a,b` 选阶段、`--in-size` / `--epochs-scale` 调规模、
 > `--no-pretrained` 复现旧流水线口径、`--python <解释器>` 指定解释器。运行记录写
 > `results/metrics/run_project_summary.json`，每阶段日志在 `results/logs/run_project/`。
 >
