@@ -20,6 +20,9 @@
 *.sh    text eol=lf
 *.xml   text eol=lf
 
+# Windows 批处理保持 CRLF：cmd.exe 对 LF 结尾的 goto/标签解析不可靠（demo/*.bat 依赖标签跳转）
+*.bat   text eol=crlf
+
 # 二进制文件：禁止任何换行符转换
 *.png       binary
 *.jpg       binary
