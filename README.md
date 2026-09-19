@@ -218,6 +218,7 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 │   ├── figures/   ← 62 张（数据分布图、分类混淆矩阵/CAM、检测 PR/AP/样例图）
 │   ├── logs/      ← 7 份（B 的训练日志、超参记录与测试集使用记录）
 │   └── weights/   ← 16 个权重文件（981 MB，不进 git）
+├── demo/                     ← C：交互式演示程序（任选数据集图片查看检测结果）
 └── docs/
     ├── B_分类任务工作总结.md
     └── C_检测任务工作总结.md
@@ -342,6 +343,10 @@ C 检测：dataset/det/JPEGImages/  +  dataset/det/Annotations/  +  dataset/det/
 >
 > **不用先 activate 环境**：脚本会自检当前解释器有没有 paddle，没有就自动找到装了 paddle 的
 > 解释器（本项目为 `miniconda3\envs\paddle_env\python.exe`）并用它重新运行；加 `--no-auto-python` 可关闭该行为。
+>
+> **交互式演示（答辩/验收推荐）**：双击 `demo/run_gui.bat` 打开图形界面，可从 1800 张里任选一张
+> 查看融合流程的检测结果（真值/预测叠加、逐框分数与判定、候选漏斗，可导出 HTML 报告与三联图）。
+> 说明见 [`demo/README.md`](demo/README.md)。
 
 下面是**逐条命令**的原始用法（想单独跑某一步时看这里）：
 

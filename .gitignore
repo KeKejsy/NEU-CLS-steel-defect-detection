@@ -15,6 +15,8 @@ dataset/det/Annotations/
 
 # 例外：results/figures/ 下的图是作业成果，报告要用，必须进仓库
 !results/figures/*.png
+# 例外：demo/ 的界面截图是演示程序文档的一部分
+!demo/screenshot_gui.png
 
 # 训练产物
 results/logs/
