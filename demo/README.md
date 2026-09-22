@@ -100,9 +100,9 @@ C:\Users\htt22\miniconda3\envs\paddle_env\python.exe demo\demo_fused.py --gui
 
 | 现象 | 处理 |
 |---|---|
-| 双击闪退 | 仓库被移动/改名 → 用记事本改 `run_gui.bat` 里的 `set "SCRIPT=..."` |
+| 双击闪退 | 仓库被移动/改名也没关系：两个 .bat 都按自身位置（`%~dp0`）找程序，无需改路径；确认新位置下 `demo/` 与 `src/`、`dataset/`、`results/weights/` 齐全即可 |
 | 提示找不到权重 | 确认 `results/weights/` 下两个 pre128/giou128 权重存在 |
-| 想重新算 | 加 `--no-cache`，或删除 `%TEMP%\neu_det_demo_cache` |
+| 想重新算 | 加 `--no-cache`（既不读也不写缓存），或删除 `%TEMP%\neu_det_demo_cache` |
 | 想更快 | `--stride 16`（快约 1.7 倍，指标略降）|
 | 无 GPU | 加 `--device cpu`（明显变慢）|
 

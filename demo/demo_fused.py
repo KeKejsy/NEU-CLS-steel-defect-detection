@@ -123,7 +123,7 @@ def read_gt(ann_p):
 # 推理管线（模型常驻 + 结果缓存）
 # --------------------------------------------------------------------------
 class Pipeline:
-    def __init__(self, cfg, cache_dir=None, verbose=True):
+    def __init__(self, cfg, cache_dir=None, verbose=True, use_cache=True):
         self.cfg = dict(cfg)
         utils.pick_device(prefer_gpu=(cfg["device"] == "gpu"))
         self.device = "gpu" if cfg["device"] == "gpu" else "cpu"
@@ -154,16 +154,24 @@ class Pipeline:
         }, sort_keys=True).encode()).hexdigest()[:10]
         self.cache_dir = Path(cache_dir) if cache_dir else (
             Path(tempfile.gettempdir()) / "neu_det_demo_cache")
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.use_cache = bool(use_cache)
+        if self.use_cache:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.tag = tag
         if verbose:
-            print(f"[演示] 权重加载完成 {self.load_sec:.1f}s；缓存目录 {self.cache_dir}", flush=True)
+            print(f"[演示] 权重加载完成 {self.load_sec:.1f}s；"
+                  f"缓存目录 {self.cache_dir if self.use_cache else '(本次运行不使用缓存)'}",
+                  flush=True)
 
     def cache_path(self, name):
         return self.cache_dir / f"{name}__{self.tag}.json"
 
     def infer(self, item, use_cache=True):
-        """对一张图跑完整融合流程，返回结果字典（含 GT / 预测 / 匹配 / 计时）"""
+        """对一张图跑完整融合流程，返回结果字典（含 GT / 预测 / 匹配 / 计时）
+
+        use_cache 同时控制「读」和「写」：关掉就完全不碰缓存目录。
+        """
+        use_cache = bool(use_cache) and self.use_cache
         cp = self.cache_path(item["name"])
         if use_cache and cp.exists():
             r = json.loads(cp.read_text(encoding="utf-8"))
@@ -305,7 +313,8 @@ class Pipeline:
                          "refiner_weights": Path(R_WEIGHTS).name},
             "reference": REFERENCE, "from_cache": False,
         }
-        cp.write_text(json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8")
+        if use_cache:
+            cp.write_text(json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8")
         return r
 
 
@@ -814,7 +823,8 @@ def main():
     ap.add_argument("--export-dir", default=None,
                     help="导出目录：自动命名 <名称>_三联图.png 与 <名称>.html（推荐，中文名由 Python 生成）")
     ap.add_argument("--open", action="store_true", help="导出后自动打开")
-    ap.add_argument("--no-cache", action="store_true", help="不使用结果缓存")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="不使用结果缓存：既不读也不写，每次重新推理（也不会在 %TEMP% 留下文件）")
     ap.add_argument("--cache-dir", default=None, help="缓存目录（默认 results/logs/demo_cache）")
     ap.add_argument("--selftest", action="store_true", help="无界面自检")
     for k, v in DEFAULT.items():
@@ -851,7 +861,7 @@ def main():
         return
 
     cfg = {k: getattr(args, k) for k in DEFAULT}
-    pipe = Pipeline(cfg, cache_dir=args.cache_dir)
+    pipe = Pipeline(cfg, cache_dir=args.cache_dir, use_cache=not args.no_cache)
 
     if args.selftest:
         root, app = launch_gui(pipe, items)
